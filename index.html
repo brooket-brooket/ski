@@ -496,6 +496,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.8;
 document.body.appendChild(renderer.domElement);
@@ -1243,6 +1244,8 @@ let rothModel = null;
 let rothMixer = null;
 let rothBoneMap = null;
 let modelLoaded = false;
+// Clipping plane to remove shirt flare below waist
+const shirtClipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 // Luxury casual ski palette
 const luxuryPalette = {
@@ -1327,28 +1330,28 @@ function addHelmetAndGoggles(group, headY) {
 function addLongHair(group, headY) {
   const y = headY || 1.72;
   const hairMat = new THREE.MeshStandardMaterial({ color: luxuryPalette.hair, roughness: 0.8 });
-  // Main volume
-  const hairBack = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.05, 0.9, 10), hairMat);
-  hairBack.position.set(0, y - 0.45, -0.1);
-  hairBack.rotation.x = 0.18;
+  // Main volume — shorter, shoulder length
+  const hairBack = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.06, 0.45, 10), hairMat);
+  hairBack.position.set(0, y - 0.25, -0.1);
+  hairBack.rotation.x = 0.15;
   hairBack.castShadow = true;
   group.add(hairBack);
-  // Flowing strands
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 1.2 - Math.PI * 0.6;
-    const len = 0.6 + Math.random() * 0.4;
-    const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.012, len, 6), hairMat);
-    strand.position.set(Math.sin(angle) * 0.12, y - 0.5 - len * 0.25, -0.1 + Math.cos(angle) * 0.05);
-    strand.rotation.x = 0.15 + Math.random() * 0.12;
-    strand.rotation.z = Math.sin(angle) * 0.2;
+  // Short flowing strands
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 1.2 - Math.PI * 0.6;
+    const len = 0.25 + Math.random() * 0.15;
+    const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.015, len, 6), hairMat);
+    strand.position.set(Math.sin(angle) * 0.1, y - 0.35 - len * 0.2, -0.1 + Math.cos(angle) * 0.04);
+    strand.rotation.x = 0.12 + Math.random() * 0.1;
+    strand.rotation.z = Math.sin(angle) * 0.15;
     strand.castShadow = true;
     group.add(strand);
   }
-  // Side pieces framing face
+  // Shorter side pieces framing face
   [-1, 1].forEach(side => {
-    const sideHair = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.02, 0.65, 6), hairMat);
-    sideHair.position.set(side * 0.16, y - 0.35, 0.04);
-    sideHair.rotation.z = side * 0.15;
+    const sideHair = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.35, 6), hairMat);
+    sideHair.position.set(side * 0.14, y - 0.22, 0.04);
+    sideHair.rotation.z = side * 0.12;
     sideHair.castShadow = true;
     group.add(sideHair);
   });
@@ -1381,7 +1384,10 @@ function restyleRothModel(model) {
           metalness: style.metalness,
           side: THREE.DoubleSide,
         });
-        if (child.name === 'Ch13_Shirt') child.userData.cosmeticRole = 'jacket';
+        if (child.name === 'Ch13_Shirt') {
+          child.userData.cosmeticRole = 'jacket';
+          child.material.clippingPlanes = [shirtClipPlane];
+        }
       } else {
         console.log('    -> NO MATCH, using default skin for:', child.name);
         // Default: make visible with skin color
@@ -2654,6 +2660,11 @@ function animate() {
     sunLight.position.set(skier.position.x + 80, 120, skier.position.z - 60);
     sunLight.target.position.set(skier.position.x, 0, skier.position.z - 15);
     sunLight.target.updateMatrixWorld();
+  }
+
+  // Update shirt clip plane to follow skier (clip below waist ~0.95 up the 1.7-tall model)
+  if (skier) {
+    shirtClipPlane.constant = -(skier.position.y + 0.92);
   }
 
   // Parallax background mountains
