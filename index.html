@@ -1278,17 +1278,20 @@ function addSkiEquipment(group) {
     bind.position.set(sx, 0.05, 0);
     group.add(bind);
   });
-  // Silver poles
+  // Silver poles — created as a group so they can be repositioned to follow hands
   const poleMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.2, metalness: 0.65 });
   [-1, 1].forEach(side => {
+    const poleGroup = new THREE.Group();
+    poleGroup.userData.poleHand = side === -1 ? 'left' : 'right';
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.6, 5), poleMat);
-    pole.position.set(side * 0.35, 0.4, 0.12);
+    pole.position.set(0, -0.4, 0);
     pole.rotation.x = 0.15;
-    pole.rotation.z = side * 0.06;
-    group.add(pole);
+    poleGroup.add(pole);
     const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.008, 8), poleMat);
-    basket.position.set(side * 0.37, 0.02, 0.22);
-    group.add(basket);
+    basket.position.set(0, -1.18, 0.08);
+    poleGroup.add(basket);
+    poleGroup.position.set(side * 0.35, 0.8, 0.12);
+    group.add(poleGroup);
   });
 }
 
@@ -2670,6 +2673,28 @@ function animate() {
     pb('mixamorigRightLeg', 0.2, 0, 0);
     // Forward lean
     pb('mixamorigSpine', 0.1, 0, 0);
+
+    // Move pole groups to follow hand bone positions
+    if (skier && rothModel) {
+      const _wp = new THREE.Vector3();
+      // Update world matrices so bone positions are current
+      rothModel.updateMatrixWorld(true);
+      skier.traverse(child => {
+        if (child.userData.poleHand) {
+          // Try hand bone first, fall back to forearm
+          const side = child.userData.poleHand;
+          const boneName = rothBoneMap['mixamorig' + (side === 'left' ? 'Left' : 'Right') + 'Hand']
+            ? 'mixamorig' + (side === 'left' ? 'Left' : 'Right') + 'Hand'
+            : 'mixamorig' + (side === 'left' ? 'Left' : 'Right') + 'ForeArm';
+          const bone = rothBoneMap[boneName];
+          if (bone) {
+            bone.getWorldPosition(_wp);
+            skier.worldToLocal(_wp);
+            child.position.copy(_wp);
+          }
+        }
+      });
+    }
   }
 
   renderer.render(scene, camera);
