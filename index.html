@@ -1283,13 +1283,18 @@ function addSkiEquipment(group) {
   [-1, 1].forEach(side => {
     const poleGroup = new THREE.Group();
     poleGroup.userData.poleHand = side === -1 ? 'left' : 'right';
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.6, 5), poleMat);
-    pole.position.set(0, -0.4, 0);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 5), poleMat);
+    pole.position.set(0, -0.25, 0.04);
     pole.rotation.x = 0.15;
     poleGroup.add(pole);
-    const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.008, 8), poleMat);
-    basket.position.set(0, -1.18, 0.08);
+    const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.006, 8), poleMat);
+    basket.position.set(0, -0.62, 0.08);
     poleGroup.add(basket);
+    // Grip nub at top of pole
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.014, 0.06, 5),
+      new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 }));
+    grip.position.set(0, 0.14, 0.02);
+    poleGroup.add(grip);
     poleGroup.position.set(side * 0.35, 0.8, 0.12);
     group.add(poleGroup);
   });
