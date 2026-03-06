@@ -1241,6 +1241,7 @@ function buildSkierModel(opts) {
 let skier;
 let rothModel = null;
 let rothMixer = null;
+let rothBoneMap = null;
 let modelLoaded = false;
 
 // Luxury casual ski palette
@@ -1566,6 +1567,9 @@ function createPlayerSkier() {
     const box2 = new THREE.Box3().setFromObject(rothModel);
     rothModel.position.y = -box2.min.y; // Plant feet on ground
 
+    // Face the model AWAY from camera (she should face -Z so we see her back)
+    rothModel.rotation.y = Math.PI;
+
     // Restyle with luxury ski fashion
     restyleRothModel(rothModel);
 
@@ -1575,52 +1579,7 @@ function createPlayerSkier() {
     addHelmetAndGoggles(skier, headY);
     addLongHair(skier, headY);
 
-    // Pose the skeleton — fix T-pose into relaxed ski stance
-    rothModel.traverse(child => {
-      if (child.isBone) {
-        const n = child.name.toLowerCase();
-        // Log bone names for debugging
-        if (n.includes('arm') || n.includes('shoulder') || n.includes('hand') || n.includes('elbow') || n.includes('spine') || n.includes('leg') || n.includes('knee'))
-          console.log('  Bone:', child.name);
-
-        // Upper arms — rotate down from T-pose and slightly forward
-        if (n.includes('leftshoulder') || n.includes('left_shoulder')) {
-          child.rotation.z = 0.4;  // Rotate arm down
-        }
-        if (n.includes('rightshoulder') || n.includes('right_shoulder')) {
-          child.rotation.z = -0.4;
-        }
-        if (n.includes('leftarm') && !n.includes('fore')) {
-          child.rotation.z = 1.1;   // Bring arm down from T
-          child.rotation.x = 0.3;   // Slightly forward
-        }
-        if (n.includes('rightarm') && !n.includes('fore')) {
-          child.rotation.z = -1.1;
-          child.rotation.x = 0.3;
-        }
-        // Forearms — bend elbows forward (holding poles)
-        if (n.includes('leftforearm') || n.includes('left_forearm')) {
-          child.rotation.x = 0.4;
-          child.rotation.z = 0.3;
-        }
-        if (n.includes('rightforearm') || n.includes('right_forearm')) {
-          child.rotation.x = 0.4;
-          child.rotation.z = -0.3;
-        }
-        // Slight knee bend for ski stance
-        if (n.includes('leftleg') && !n.includes('up')) {
-          child.rotation.x = 0.15;
-        }
-        if (n.includes('rightleg') && !n.includes('up')) {
-          child.rotation.x = 0.15;
-        }
-        // Slight forward lean at spine
-        if (n.includes('spine') && !n.includes('spine1') && !n.includes('spine2')) {
-          child.rotation.x = 0.08;
-        }
-      }
-    });
-
+    // Add model to scene first so world matrices are valid
     skier.add(rothModel);
     addSkiEquipment(skier);
     modelLoaded = true;
@@ -1630,13 +1589,14 @@ function createPlayerSkier() {
     console.log('BBox after scale max:', box2.max.x.toFixed(3), box2.max.y.toFixed(3), box2.max.z.toFixed(3));
     console.log('Model position.y:', rothModel.position.y.toFixed(3), '| headY:', headY.toFixed(3), '| scaledHeight:', scaledHeight.toFixed(3));
 
-    // Setup animation mixer
-    if (gltf.animations && gltf.animations.length > 0) {
-      rothMixer = new THREE.AnimationMixer(rothModel);
-      gltf.animations.forEach(clip => {
-        rothMixer.clipAction(clip).play();
-      });
-    }
+    // Build a pose map — bones will be posed each frame in the render loop
+    // (one-time posing during loading gets lost before the first render)
+    const boneMap = {};
+    rothModel.traverse(child => {
+      if (child.isBone) boneMap[child.name] = child;
+    });
+    rothBoneMap = boneMap;
+    console.log('Roth bones found:', Object.keys(boneMap).length);
   }, undefined, (err) => {
     console.warn('Failed to load roth.glb, using procedural skier:', err.message);
     // Fallback to procedural skier
@@ -2547,7 +2507,7 @@ function animate() {
       if (pzNow < band.z + halfZone && pzNow > band.z - halfZone) {
         inAir = true;
         const progress = 1 - (band.z + halfZone - pzNow) / airZone; // 0→1 through arc
-        skier.position.y = Math.max(0, band.height * Math.sin(progress * Math.PI));
+        skier.position.y = Math.max(0, band.height * Math.sin(progress * Math.PI)) + 0.1;
         state.speed *= 1.005;
       }
     });
@@ -2564,12 +2524,19 @@ function animate() {
       }
     }
 
+    // Compute terrain height at skier's position (matches slope geometry sine waves)
+    const txS = state.posX;
+    const tyS = state.distance; // original plane Y = -worldZ = distance
+    const terrainY = Math.sin(txS * 0.04) * 0.2 + Math.sin(tyS * 0.02 + txS * 0.03) * 0.15
+      + Math.sin(txS * 0.12) * 0.05 + Math.sin(tyS * 0.06) * 0.08;
+    const groundY = Math.max(0, terrainY); // never below flat ground
+
     // Move skier
     skier.position.x = state.posX;
     skier.position.z = -state.distance;
-    if (onMogul && !inAir) skier.position.y = 0.3;
-    else if (!inAir && skier.position.y > 0.05) skier.position.y *= 0.8;
-    else if (!inAir) skier.position.y = 0;
+    if (onMogul && !inAir) skier.position.y = groundY + 0.3;
+    else if (!inAir && skier.position.y > groundY + 0.05) skier.position.y = groundY + (skier.position.y - groundY) * 0.8;
+    else if (!inAir) skier.position.y = groundY;
     skier.rotation.y = state.turnSpeed * 10;
     skier.rotation.z = -state.turnSpeed * 3;
 
@@ -2606,7 +2573,7 @@ function animate() {
     obstacles.forEach(ob => {
       const dx = px - ob.position.x, dz = pz - ob.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      const hitRadius = (ob.userData.radius || 2) + 0.5;
+      const hitRadius = (ob.userData.radius || 1.2) * 0.7;
       if (dist < hitRadius) {
         triggerCrash();
         if (dist > 0.01) {
@@ -2681,6 +2648,29 @@ function animate() {
 
   // Parallax background mountains
   updateMountains();
+
+  // Apply ski pose to Roth model bones every frame
+  // (one-time posing during GLB load gets overwritten before first render)
+  if (rothBoneMap) {
+    const E = new THREE.Euler();
+    function pb(n, rx, ry, rz) {
+      const b = rothBoneMap[n];
+      if (b) { E.set(rx, ry, rz, 'XYZ'); b.quaternion.setFromEuler(E); }
+    }
+    // Arms down from T-pose into tuck
+    pb('mixamorigLeftArm', 0.6, 0.2, 1.45);
+    pb('mixamorigRightArm', 0.6, -0.2, -1.45);
+    pb('mixamorigLeftShoulder', 0, 0, 0.35);
+    pb('mixamorigRightShoulder', 0, 0, -0.35);
+    // Elbows bent (holding poles)
+    pb('mixamorigLeftForeArm', 0.7, 0, 0.4);
+    pb('mixamorigRightForeArm', 0.7, 0, -0.4);
+    // Slight knee bend
+    pb('mixamorigLeftLeg', 0.2, 0, 0);
+    pb('mixamorigRightLeg', 0.2, 0, 0);
+    // Forward lean
+    pb('mixamorigSpine', 0.1, 0, 0);
+  }
 
   renderer.render(scene, camera);
 }
