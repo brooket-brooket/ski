@@ -1,0 +1,9 @@
+.claude/
+*.fbx
+*.fbm/
+*.pdf
+inspect-glb.js
+PROGRESS.md
+PROJECT.md
+RUNS-PLAN.md
+ski-challenge-handoff.md

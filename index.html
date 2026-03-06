@@ -1,0 +1,2704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ski Challenge: Telluride Edition</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    overflow: hidden;
+    background: #0a1628;
+    font-family: 'Nunito', sans-serif;
+    cursor: default;
+    user-select: none;
+  }
+
+  canvas { display: block; }
+
+  /* ── Start Screen / Trail Map ─────────────── */
+  #start-screen {
+    position: fixed; inset: 0;
+    z-index: 100;
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  #start-screen.hidden {
+    opacity: 0; transform: scale(1.05); pointer-events: none;
+  }
+
+  .trail-map-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #1a3a5c 0%, #2d6a9f 15%, #87CEEB 35%, #c8dde9 50%, #e0e8ef 60%, #f0f6fa 75%, #fff 100%);
+  }
+  .trail-map-mountain {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 72%;
+    clip-path: polygon(
+      0% 100%, 0% 85%, 3% 72%, 8% 60%, 12% 55%, 16% 62%, 20% 48%,
+      24% 42%, 28% 50%, 32% 35%, 36% 28%, 40% 38%, 44% 22%,
+      48% 15%, 52% 10%, 56% 18%, 60% 12%, 64% 22%, 68% 16%,
+      72% 28%, 76% 20%, 80% 32%, 84% 25%, 88% 38%, 92% 45%,
+      96% 55%, 100% 50%, 100% 100%
+    );
+    background: linear-gradient(180deg, #c8d8e4 0%, #d8e6f0 20%, #e8f0f4 50%, #f5f9fb 80%, #fff 100%);
+  }
+  /* Snow patches on mountain */
+  .trail-map-mountain::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 30%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%);
+  }
+
+  .trail-map-svg {
+    position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+  }
+  .trail-map-svg polyline {
+    fill: none; stroke-width: 0.8; stroke-linecap: round; stroke-linejoin: round;
+    filter: drop-shadow(0 0.3px 0.5px rgba(0,0,0,0.35));
+  }
+
+  .trail-map-runs { position: absolute; inset: 0; z-index: 3; }
+
+  .run-marker {
+    position: absolute; width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid #fff; cursor: pointer;
+    transform: translate(-50%, -50%); transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 4;
+  }
+  .run-marker:hover { transform: translate(-50%, -50%) scale(1.2); }
+  .run-marker.selected {
+    transform: translate(-50%, -50%) scale(1.35);
+    box-shadow: 0 0 0 4px rgba(255,215,0,0.6), 0 4px 16px rgba(0,0,0,0.4);
+    border-color: #ffd700;
+  }
+  .run-marker-label {
+    position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-family: 'Fredoka', sans-serif;
+    font-size: 0.6rem; font-weight: 600; color: #1a3a5c;
+    text-shadow: 0 1px 3px rgba(255,255,255,0.9); pointer-events: none;
+  }
+
+  .trail-map-title {
+    position: absolute; top: 2.5%; left: 50%; transform: translateX(-50%);
+    text-align: center; z-index: 5; animation: floatIn 1.2s ease-out;
+  }
+
+  @keyframes floatIn {
+    from { opacity: 0; transform: translateY(-40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .game-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: clamp(1.8rem, 5vw, 3.5rem); font-weight: 700; color: #fff;
+    text-shadow: 0 3px 0 #1a5276, 0 6px 15px rgba(26,58,92,0.4);
+    letter-spacing: -1px; line-height: 1;
+  }
+  .game-subtitle {
+    font-family: 'Fredoka', sans-serif;
+    font-size: clamp(0.6rem, 2vw, 1.1rem); font-weight: 500;
+    color: #ffd700; text-shadow: 0 2px 0 #b8860b;
+    margin-top: 4px; letter-spacing: 3px; text-transform: uppercase;
+  }
+
+  .run-info-panel {
+    position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+    z-index: 5; background: rgba(10,22,40,0.82);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px; padding: 16px 24px; text-align: center;
+    min-width: 280px; max-width: 400px; animation: floatIn 0.4s ease-out;
+  }
+  .run-info-name {
+    font-family: 'Fredoka', sans-serif; font-size: 1.4rem; font-weight: 700; color: #fff;
+  }
+  .run-info-difficulty { font-size: 1rem; margin: 3px 0; }
+  .run-info-desc { font-size: 0.8rem; color: rgba(255,255,255,0.65); margin-bottom: 10px; }
+  .run-info-stats {
+    display: flex; gap: 14px; justify-content: center;
+    font-size: 0.7rem; color: rgba(255,255,255,0.45); margin-bottom: 10px;
+  }
+
+  .start-btn {
+    position: relative; z-index: 2; margin-top: 8px; padding: 14px 45px;
+    font-family: 'Fredoka', sans-serif; font-size: 1.2rem; font-weight: 600;
+    color: #1a3a5c; background: linear-gradient(180deg, #ffd700 0%, #ffb800 100%);
+    border: none; border-radius: 50px; cursor: pointer;
+    box-shadow: 0 5px 0 #c48f00, 0 8px 25px rgba(255,184,0,0.4);
+    transition: all 0.15s ease;
+  }
+  .start-btn:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #c48f00, 0 12px 35px rgba(255,184,0,0.5); }
+  .start-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #c48f00; }
+
+  .shop-btn-trail {
+    margin-top: 6px !important; padding: 10px 30px !important; font-size: 0.95rem !important;
+    background: linear-gradient(180deg,#4fc3f7 0%,#2196f3 100%) !important;
+    color: #fff !important; box-shadow: 0 4px 0 #1565c0 !important;
+  }
+
+  .wallet-display-trail {
+    position: absolute; top: 10px; right: 14px; z-index: 5;
+    color: #ffc107; font-weight: 700; font-family: 'Fredoka', sans-serif; font-size: 0.95rem;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  .controls-hint-trail {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 5; color: rgba(255,255,255,0.5); font-size: 0.75rem;
+    font-family: 'Nunito', sans-serif;
+  }
+  .controls-hint-trail kbd {
+    display: inline-block; padding: 2px 7px; background: rgba(255,255,255,0.15);
+    border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);
+    font-family: 'Nunito', sans-serif; font-size: 0.7rem; margin: 0 1px;
+  }
+
+  /* ── HUD ───────────────────────────────── */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 50; padding: 20px 30px;
+    display: none; justify-content: space-between;
+    align-items: flex-start; pointer-events: none;
+  }
+  #hud.active { display: flex; }
+
+  .hud-panel {
+    background: rgba(10,22,40,0.55);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 12px 20px;
+    color: #fff; font-weight: 600;
+  }
+
+  .hud-stat { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+  .hud-stat + .hud-stat { margin-top: 6px; }
+  .hud-icon { font-size: 1.3rem; }
+  .hud-value { font-family: 'Fredoka', sans-serif; font-weight: 700; }
+
+  .progress-container {
+    position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%);
+    z-index: 50; display: none; width: 280px; text-align: center;
+  }
+  .progress-container.active { display: block; }
+  .progress-label { color: rgba(255,255,255,0.7); font-size: 0.75rem; margin-bottom: 6px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  .progress-track { width: 100%; height: 8px; background: rgba(10,22,40,0.45); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #4fc3f7, #81d4fa); border-radius: 10px; transition: width 0.3s ease; width: 0%; }
+
+  .speed-indicator {
+    position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+    z-index: 50; display: none;
+    color: rgba(255,255,255,0.85);
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.5rem; font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .speed-indicator.active { display: block; }
+
+  /* ── Level Complete ────────────────────── */
+  #level-complete {
+    position: fixed; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 200;
+    background: rgba(10,22,40,0.85);
+    backdrop-filter: blur(10px);
+  }
+  #level-complete.active { display: flex; }
+
+  .complete-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 3.5rem; font-weight: 700;
+    color: #ffd700;
+    text-shadow: 0 4px 20px rgba(255,215,0,0.4);
+    animation: bounceIn 0.6s ease-out;
+  }
+  @keyframes bounceIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .complete-stats { margin-top: 25px; text-align: center; color: #fff; font-size: 1.3rem; line-height: 2; }
+  .complete-stats .label { color: rgba(255,255,255,0.6); }
+  .complete-stats .value { font-family: 'Fredoka', sans-serif; font-weight: 700; color: #4fc3f7; }
+  .coins-earned .value { color: #ffd700; }
+
+  .restart-btn {
+    margin-top: 35px; padding: 14px 45px;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.2rem; font-weight: 600; color: #fff;
+    background: linear-gradient(180deg, #4fc3f7 0%, #2196f3 100%);
+    border: none; border-radius: 50px; cursor: pointer;
+    box-shadow: 0 4px 0 #1565c0, 0 8px 25px rgba(33,150,243,0.4);
+    transition: all 0.15s ease;
+  }
+  .restart-btn:hover { transform: translateY(-2px); }
+  .restart-btn:active { transform: translateY(3px); }
+
+  #crash-overlay {
+    position: fixed; inset: 0; z-index: 150;
+    background: radial-gradient(circle, rgba(255,0,0,0.25) 0%, transparent 70%);
+    pointer-events: none; opacity: 0; transition: opacity 0.15s ease;
+  }
+  #crash-overlay.flash { opacity: 1; }
+
+  #pause-btn {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 60; display: none;
+    padding: 8px 24px;
+    font-family: 'Fredoka', sans-serif; font-size: 1rem; font-weight: 600;
+    color: #fff; background: rgba(10,22,40,0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 12px;
+    cursor: pointer; pointer-events: all;
+    transition: background 0.2s;
+  }
+  #pause-btn:hover { background: rgba(10,22,40,0.8); }
+  #pause-btn.active { display: block; }
+
+  #pause-overlay {
+    position: fixed; inset: 0; z-index: 180;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(10,22,40,0.65);
+    backdrop-filter: blur(6px);
+  }
+  #pause-overlay.active { display: flex; }
+  .pause-text {
+    font-family: 'Fredoka', sans-serif; font-size: 3rem; font-weight: 700;
+    color: #fff; text-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  /* ── Shop Overlay ────────────────────── */
+  #shop-overlay {
+    position: fixed; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    z-index: 210;
+    background: rgba(10,22,40,0.90);
+    backdrop-filter: blur(12px);
+  }
+  #shop-overlay.active { display: flex; }
+
+  .shop-container {
+    width: min(90vw, 520px); max-height: 85vh;
+    background: rgba(15,30,55,0.85);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px; padding: 28px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+    overflow: hidden;
+  }
+  .shop-header { display: flex; justify-content: space-between; align-items: center; }
+  .shop-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 2.2rem; font-weight: 700;
+    color: #ffd700; text-shadow: 0 3px 15px rgba(255,215,0,0.4);
+  }
+  .shop-wallet {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.3rem; font-weight: 700; color: #ffc107;
+    background: rgba(255,193,7,0.12);
+    padding: 6px 16px; border-radius: 12px;
+    border: 1px solid rgba(255,193,7,0.25);
+  }
+  .shop-categories { display: flex; gap: 8px; flex-wrap: wrap; }
+  .shop-tab {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.95rem; font-weight: 600;
+    padding: 8px 18px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.7);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .shop-tab:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .shop-tab.active {
+    background: linear-gradient(180deg, #4fc3f7 0%, #2196f3 100%);
+    color: #fff; border-color: transparent;
+  }
+  .shop-items {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; overflow-y: auto; max-height: 50vh; padding-right: 4px;
+  }
+  .shop-item {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 16px;
+    text-align: center; transition: all 0.2s;
+  }
+  .shop-item:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+  .shop-item-preview {
+    width: 48px; height: 48px; border-radius: 50%;
+    margin: 0 auto 8px;
+    border: 3px solid rgba(255,255,255,0.15);
+  }
+  .shop-item-name {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.95rem; font-weight: 600; color: #fff; margin-bottom: 4px;
+  }
+  .shop-item-desc {
+    font-size: 0.75rem; color: rgba(255,255,255,0.5);
+    margin-bottom: 10px; line-height: 1.3;
+  }
+  .shop-item-btn {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.85rem; font-weight: 600;
+    padding: 6px 16px; border-radius: 16px;
+    border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .shop-item-btn.buy {
+    color: #1a3a5c;
+    background: linear-gradient(180deg, #ffd700 0%, #ffb800 100%);
+    box-shadow: 0 3px 0 #c48f00;
+  }
+  .shop-item-btn.buy:hover { transform: translateY(-1px); }
+  .shop-item-btn.buy.too-expensive {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.3);
+    box-shadow: none; cursor: not-allowed;
+  }
+  .shop-item-btn.equip {
+    background: linear-gradient(180deg, #4fc3f7 0%, #2196f3 100%);
+    color: #fff; box-shadow: 0 3px 0 #1565c0;
+  }
+  .shop-item-btn.equipped {
+    background: rgba(76,175,80,0.25);
+    color: #69f0ae;
+    border: 1px solid rgba(76,175,80,0.4);
+    box-shadow: none; cursor: default;
+  }
+  .shop-close-btn {
+    margin-top: 8px; padding: 12px 40px; align-self: center;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.1rem; font-weight: 600; color: #fff;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 50px; cursor: pointer; transition: all 0.15s;
+  }
+  .shop-close-btn:hover { background: rgba(255,255,255,0.18); }
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <div class="trail-map-bg"></div>
+  <div class="trail-map-mountain"></div>
+  <svg class="trail-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" id="trail-map-svg"></svg>
+  <div class="trail-map-runs" id="trail-map-runs"></div>
+  <div class="trail-map-title">
+    <div class="game-title">Ski Challenge</div>
+    <div class="game-subtitle">Telluride Edition</div>
+  </div>
+  <div class="run-info-panel" id="run-info-panel">
+    <div class="run-info-name" id="run-info-name">Meadows</div>
+    <div class="run-info-difficulty" id="run-info-difficulty"></div>
+    <div class="run-info-desc" id="run-info-desc"></div>
+    <div class="run-info-stats" id="run-info-stats"></div>
+    <button class="start-btn" onclick="startGame()">Hit the Slopes!</button>
+    <br>
+    <button class="start-btn shop-btn-trail" onclick="openShop('start')">Ski Shop</button>
+  </div>
+  <div class="wallet-display-trail">🪙 <span id="start-wallet">0</span></div>
+  <div class="controls-hint-trail">
+    <kbd>←</kbd> <kbd>→</kbd> steer · <kbd>↑</kbd> speed · <kbd>↓</kbd> brake
+  </div>
+</div>
+
+<div id="hud">
+  <div class="hud-panel">
+    <div class="hud-stat" id="run-name-label" style="font-weight:700;color:#ffd700;font-size:0.85rem;margin-bottom:4px;"></div>
+    <div class="hud-stat"><span class="hud-icon">⏱️</span> <span class="hud-value" id="timer">0:00</span></div>
+    <div class="hud-stat"><span class="hud-icon">⭐</span> <span class="hud-value" id="stars">0 / 0</span></div>
+  </div>
+  <div class="hud-panel">
+    <div class="hud-stat"><span class="hud-icon">🪙</span> <span class="hud-value" id="coins">0</span></div>
+    <div class="hud-stat"><span class="hud-icon">❤️</span> <span class="hud-value" id="lives">3</span></div>
+  </div>
+</div>
+
+<div class="speed-indicator" id="speed-indicator">42 mph</div>
+<div class="progress-container" id="progress-container">
+  <div class="progress-label">DISTANCE TO FINISH</div>
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+</div>
+
+<div id="crash-overlay"></div>
+<button id="pause-btn" onclick="togglePause()">⏸ Pause</button>
+<div id="pause-overlay"><div class="pause-text">PAUSED</div></div>
+
+<div id="level-complete">
+  <div class="complete-title">⛷️ Run Complete!</div>
+  <div class="complete-stats">
+    <div class="label">Time</div><div class="value" id="final-time">0:00</div>
+    <div class="label" style="margin-top:10px">Stars Collected</div><div class="value" id="final-stars">0 / 0</div>
+    <div class="coins-earned" style="margin-top:10px"><div class="label">Coins Earned</div><div class="value" id="final-coins">0</div></div>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:35px;">
+    <button class="restart-btn" onclick="returnToTrailMap()" style="margin-top:0;">Trail Map</button>
+    <button class="restart-btn" onclick="openShop('complete')" style="margin-top:0;">Ski Shop</button>
+    <button class="restart-btn" onclick="restartGame()" style="margin-top:0;">Ski Again!</button>
+  </div>
+</div>
+
+<div id="game-over" style="position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(10,22,40,0.85);backdrop-filter:blur(8px);">
+  <div style="font-family:'Fredoka',sans-serif;font-size:3rem;font-weight:700;color:#e53935;text-shadow:0 4px 20px rgba(0,0,0,0.5);margin-bottom:10px;">Wipeout!</div>
+  <div style="font-family:'Nunito',sans-serif;font-size:1.2rem;color:#c8dde9;margin-bottom:8px;">You ran out of lives</div>
+  <div style="font-family:'Nunito',sans-serif;color:#a0b8cc;margin-bottom:5px;">Distance: <span id="go-distance" style="color:#fff;font-weight:700;">0%</span></div>
+  <div style="font-family:'Nunito',sans-serif;color:#a0b8cc;margin-bottom:5px;">Stars: <span id="go-stars" style="color:#ffd700;font-weight:700;">0</span></div>
+  <div style="font-family:'Nunito',sans-serif;color:#a0b8cc;margin-bottom:25px;">Coins: <span id="go-coins" style="color:#ffc107;font-weight:700;">0</span></div>
+  <div style="display:flex;gap:12px;">
+    <button class="restart-btn" onclick="returnToTrailMap()">Trail Map</button>
+    <button class="restart-btn" onclick="openShop('gameover')">Ski Shop</button>
+    <button class="restart-btn" onclick="restartGame()">Try Again!</button>
+  </div>
+</div>
+
+<div id="shop-overlay">
+  <div class="shop-container">
+    <div class="shop-header">
+      <div class="shop-title">Ski Shop</div>
+      <div class="shop-wallet">🪙 <span id="shop-wallet-display">0</span></div>
+    </div>
+    <div class="shop-categories">
+      <button class="shop-tab active" data-category="jacket" onclick="renderShopItems('jacket')">Jackets</button>
+      <button class="shop-tab" data-category="skis" onclick="renderShopItems('skis')">Skis</button>
+      <button class="shop-tab" data-category="trail" onclick="renderShopItems('trail')">Trails</button>
+      <button class="shop-tab" data-category="hat" onclick="renderShopItems('hat')">Hats</button>
+    </div>
+    <div class="shop-items" id="shop-items"></div>
+    <button class="shop-close-btn" onclick="closeShop()">Back</button>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.166.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+// ═══════════════════════════════════════════════════════
+// SKI CHALLENGE: TELLURIDE EDITION v3
+// Closer camera, cute detailed skier, rich trees, NPC skiers
+// ═══════════════════════════════════════════════════════
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0xc8dde9, 0.0018);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.8;
+document.body.appendChild(renderer.domElement);
+
+// Sky — realistic Colorado winter sky
+const skyCanvas = document.createElement('canvas');
+skyCanvas.width = 2; skyCanvas.height = 1024;
+const skyCtx = skyCanvas.getContext('2d');
+const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 1024);
+skyGrad.addColorStop(0, '#0b1e3d');     // Deep navy zenith
+skyGrad.addColorStop(0.15, '#1a3b6e');  // Dark blue
+skyGrad.addColorStop(0.3, '#3a6fa8');   // Rich blue
+skyGrad.addColorStop(0.5, '#6ca4cc');   // Medium blue
+skyGrad.addColorStop(0.7, '#a2c8dd');   // Pale blue
+skyGrad.addColorStop(0.85, '#c8dbe6');  // Very light blue-grey
+skyGrad.addColorStop(0.92, '#dde4e8');  // Near-white horizon haze
+skyGrad.addColorStop(1, '#e8eaeb');     // Warm white horizon
+skyCtx.fillStyle = skyGrad;
+skyCtx.fillRect(0, 0, 2, 1024);
+scene.background = new THREE.CanvasTexture(skyCanvas);
+
+// ── Lighting ─────────────────────────────────────────
+// r166 uses physically correct lights — intensities need to be higher
+scene.add(new THREE.AmbientLight(0x9dc4de, 2.0));
+
+const sunLight = new THREE.DirectionalLight(0xfff6e0, 3.0);
+sunLight.position.set(80, 120, -60);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 4096;
+sunLight.shadow.mapSize.height = 4096;
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 300;
+sunLight.shadow.camera.left = -30;
+sunLight.shadow.camera.right = 30;
+sunLight.shadow.camera.top = 30;
+sunLight.shadow.camera.bottom = -30;
+sunLight.shadow.bias = -0.0008;
+scene.add(sunLight);
+scene.add(sunLight.target);
+
+scene.add(new THREE.HemisphereLight(0x87CEEB, 0xd0e0e8, 1.5));
+const fill = new THREE.DirectionalLight(0xc0daf0, 1.0);
+fill.position.set(-50, 50, 30);
+scene.add(fill);
+
+// ── State ────────────────────────────────────────────
+const state = {
+  playing: false, speed: 0, maxSpeed: 1.4, minSpeed: 0.12,
+  baseSpeed: 0.55, acceleration: 0.007,
+  turnSpeed: 0, maxTurnSpeed: 0.045,
+  posX: 0, distance: 0, totalDistance: 700,
+  coins: 0, stars: 0, totalStars: 10,
+  crashes: 0, lives: 3, startTime: 0, elapsed: 0,
+  invincible: false, invincibleTimer: 0,
+};
+
+const keys = {};
+const obstacles = [];
+const collectibles = [];
+const worldObjects = [];
+const npcSkiers = [];
+const mogulObjects = [];
+const icePatchObjects = [];
+const cliffBandObjects = [];
+const trails = [];
+
+// ── Run Configurations ──────────────────────────────
+const RUN_CONFIGS = {
+  meadows: {
+    id: 'meadows', name: 'Meadows', difficulty: 'green',
+    difficultyLabel: '🟢', description: 'Extra-wide gentle groomed cruiser. Perfect warm-up.',
+    length: 500, slopeWidth: 240, playableHalfWidth: 30,
+    groomLineRange: [-20, 20],
+    baseSpeed: 0.45, maxSpeed: 1.1, minSpeed: 0.12, acceleration: 0.006, maxTurnSpeed: 0.04,
+    lives: 3, totalStars: 8,
+    gateSpacing: 65, coinsPerGate: 3,
+    sideForestX: [32, 40, 48], sideTreeSpacing: 3.5, sideTreeProb: 0.4,
+    encroachProb: 0.05, encroachMinX: 24,
+    onRunTreeSpacing: 14, onRunTreeProb: 0.25,
+    npcSpacing: 20, npcProb: 0.7,
+    moguls: false, rocks: false, icePatchProb: 0,
+    cliffBands: [], narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: null,
+    mapPath: { color: '#4CAF50', points: [[0.22, 0.18], [0.20, 0.35], [0.18, 0.55], [0.17, 0.75], [0.16, 0.88]] },
+  },
+  double_cabin: {
+    id: 'double_cabin', name: 'Double Cabin', difficulty: 'green-green',
+    difficultyLabel: '🟢🟢', description: '1.8 miles of big sweeping S-curves winding down the mountain.',
+    length: 900, slopeWidth: 200, playableHalfWidth: 24,
+    groomLineRange: [-16, 16],
+    baseSpeed: 0.50, maxSpeed: 1.3, minSpeed: 0.12, acceleration: 0.007, maxTurnSpeed: 0.045,
+    lives: 3, totalStars: 12,
+    gateSpacing: 55, coinsPerGate: 3,
+    sideForestX: [26, 34, 42], sideTreeSpacing: 3.5, sideTreeProb: 0.4,
+    encroachProb: 0.10, encroachMinX: 18,
+    onRunTreeSpacing: 10, onRunTreeProb: 0.35,
+    npcSpacing: 22, npcProb: 0.6,
+    moguls: false, rocks: false, icePatchProb: 0,
+    cliffBands: [], narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: [
+      { z: -30, cx: 0 },    { z: -70, cx: 10 },   { z: -110, cx: 16 },
+      { z: -150, cx: 10 },  { z: -190, cx: 0 },   { z: -230, cx: -10 },
+      { z: -270, cx: -16 }, { z: -310, cx: -10 },  { z: -350, cx: 0 },
+      { z: -390, cx: 12 },  { z: -430, cx: 18 },   { z: -470, cx: 12 },
+      { z: -510, cx: 0 },   { z: -550, cx: -12 },  { z: -590, cx: -18 },
+      { z: -630, cx: -12 }, { z: -670, cx: 0 },    { z: -710, cx: 14 },
+      { z: -750, cx: 8 },   { z: -790, cx: 0 },    { z: -830, cx: -8 },
+      { z: -870, cx: 0 },
+    ],
+    mapPath: { color: '#4CAF50', points: [[0.30, 0.14], [0.25, 0.22], [0.32, 0.32], [0.26, 0.42], [0.33, 0.52], [0.27, 0.62], [0.34, 0.72], [0.29, 0.82], [0.32, 0.88]] },
+  },
+  nellie: {
+    id: 'nellie', name: 'Nellie', difficulty: 'blue',
+    difficultyLabel: '🔷', description: 'Classic intermediate cruiser with slalom gates.',
+    length: 650, slopeWidth: 180, playableHalfWidth: 22,
+    groomLineRange: [-14, 14],
+    baseSpeed: 0.55, maxSpeed: 1.4, minSpeed: 0.12, acceleration: 0.007, maxTurnSpeed: 0.045,
+    lives: 3, totalStars: 10,
+    gateSpacing: 40, coinsPerGate: 2,
+    sideForestX: [24, 32, 40], sideTreeSpacing: 3.5, sideTreeProb: 0.4,
+    encroachProb: 0.12, encroachMinX: 16,
+    onRunTreeSpacing: 9, onRunTreeProb: 0.45,
+    npcSpacing: 25, npcProb: 0.65,
+    moguls: false, rocks: false, icePatchProb: 0,
+    cliffBands: [], narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: null,
+    mapPath: { color: '#2196F3', points: [[0.46, 0.16], [0.44, 0.32], [0.43, 0.50], [0.42, 0.68], [0.41, 0.88]] },
+  },
+  enchanted_forest: {
+    id: 'enchanted_forest', name: 'Enchanted Forest', difficulty: 'blue',
+    difficultyLabel: '🔷', description: 'Dense tree-lined run winding through pines. Trees close in!',
+    length: 600, slopeWidth: 160, playableHalfWidth: 18,
+    groomLineRange: [-12, 12],
+    baseSpeed: 0.50, maxSpeed: 1.3, minSpeed: 0.12, acceleration: 0.006, maxTurnSpeed: 0.04,
+    lives: 3, totalStars: 10,
+    gateSpacing: 60, coinsPerGate: 3,
+    sideForestX: [20, 26, 32], sideTreeSpacing: 2.5, sideTreeProb: 0.55,
+    encroachProb: 0.30, encroachMinX: 10,
+    onRunTreeSpacing: 6, onRunTreeProb: 0.60,
+    npcSpacing: 35, npcProb: 0.4,
+    moguls: false, rocks: false, icePatchProb: 0.03,
+    cliffBands: [], narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: null,
+    mapPath: { color: '#2196F3', points: [[0.56, 0.16], [0.55, 0.30], [0.54, 0.45], [0.53, 0.60], [0.52, 0.75], [0.51, 0.88]] },
+  },
+  misty_maiden: {
+    id: 'misty_maiden', name: 'Misty Maiden', difficulty: 'blue-blue',
+    difficultyLabel: '🔷🔷', description: 'Mogul fields, misty conditions, steeper with 4 gate sets.',
+    length: 700, slopeWidth: 180, playableHalfWidth: 20,
+    groomLineRange: [-14, 14],
+    baseSpeed: 0.60, maxSpeed: 1.5, minSpeed: 0.15, acceleration: 0.008, maxTurnSpeed: 0.042,
+    lives: 3, totalStars: 10,
+    gateSpacing: 0, coinsPerGate: 4,
+    gateZones: [{ z: -100, x: 0 }, { z: -280, x: -3 }, { z: -460, x: 2 }, { z: -620, x: -2 }],
+    sideForestX: [22, 30, 38], sideTreeSpacing: 3.5, sideTreeProb: 0.4,
+    encroachProb: 0.10, encroachMinX: 15,
+    onRunTreeSpacing: 11, onRunTreeProb: 0.35,
+    npcSpacing: 30, npcProb: 0.5,
+    moguls: true,
+    mogulZones: [{ startZ: -60, endZ: -160 }, { startZ: -300, endZ: -420 }, { startZ: -520, endZ: -620 }],
+    mogulSpacing: 4, mogulRowWidth: 16,
+    rocks: false, icePatchProb: 0.05,
+    cliffBands: [], narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: null,
+    fogDensity: 0.0028,
+    mapPath: { color: '#1565C0', points: [[0.65, 0.16], [0.63, 0.30], [0.62, 0.50], [0.60, 0.70], [0.59, 0.88]] },
+  },
+  plunge: {
+    id: 'plunge', name: 'Plunge', difficulty: 'black',
+    difficultyLabel: '◆', description: 'Iconic steep run — moguls, rocks, cliff bands, and ice patches.',
+    length: 550, slopeWidth: 160, playableHalfWidth: 18,
+    groomLineRange: [-10, 10],
+    baseSpeed: 0.70, maxSpeed: 1.8, minSpeed: 0.18, acceleration: 0.009, maxTurnSpeed: 0.038,
+    lives: 3, totalStars: 8,
+    gateSpacing: 70, coinsPerGate: 2,
+    sideForestX: [20, 28, 36], sideTreeSpacing: 4, sideTreeProb: 0.35,
+    encroachProb: 0.12, encroachMinX: 13,
+    onRunTreeSpacing: 12, onRunTreeProb: 0.3,
+    npcSpacing: 40, npcProb: 0.3,
+    moguls: true,
+    rocks: true, rockSpacing: 18, rockProb: 0.5,
+    icePatchProb: 0.10,
+    cliffBands: [{ z: -140, height: 5 }, { z: -230, height: 6 }, { z: -350, height: 5.5 }, { z: -470, height: 7 }],
+    narrowChutes: [], noFallZones: [],
+    sCurveWaypoints: null,
+    mapPath: { color: '#212121', points: [[0.76, 0.16], [0.74, 0.35], [0.73, 0.55], [0.72, 0.75], [0.71, 0.88]] },
+  },
+  holy_cow: {
+    id: 'holy_cow', name: 'Holy Cow', difficulty: 'double-black',
+    difficultyLabel: '◆◆', description: 'Narrow chutes, cliff bands, mandatory air, no-fall zones. 2 lives only!',
+    length: 450, slopeWidth: 120, playableHalfWidth: 8,
+    groomLineRange: [-6, 6],
+    baseSpeed: 0.75, maxSpeed: 2.0, minSpeed: 0.20, acceleration: 0.010, maxTurnSpeed: 0.032,
+    lives: 2, totalStars: 6,
+    gateSpacing: 80, coinsPerGate: 2,
+    sideForestX: [10, 16, 22], sideTreeSpacing: 2, sideTreeProb: 0.7,
+    encroachProb: 0.05, encroachMinX: 7,
+    onRunTreeSpacing: 20, onRunTreeProb: 0.2,
+    npcSpacing: 60, npcProb: 0.2,
+    moguls: true,
+    rocks: true, rockSpacing: 12, rockProb: 0.6,
+    icePatchProb: 0.15,
+    cliffBands: [{ z: -90, height: 6 }, { z: -150, height: 8 }, { z: -240, height: 7 }, { z: -330, height: 9 }, { z: -410, height: 7 }],
+    narrowChutes: [
+      { startZ: -50, endZ: -130, halfWidth: 6 },
+      { startZ: -200, endZ: -310, halfWidth: 5 },
+      { startZ: -370, endZ: -430, halfWidth: 4 },
+    ],
+    noFallZones: [{ startZ: -130, endZ: -160 }, { startZ: -320, endZ: -350 }],
+    sCurveWaypoints: null,
+    mapPath: { color: '#212121', points: [[0.84, 0.16], [0.83, 0.30], [0.82, 0.50], [0.81, 0.70], [0.80, 0.88]] },
+  },
+};
+
+const RUN_ORDER = ['meadows', 'double_cabin', 'nellie', 'enchanted_forest', 'misty_maiden', 'plunge', 'holy_cow'];
+let selectedRun = 'meadows';
+let currentRunConfig = null;
+
+// ── Persistence & Shop ──────────────────────────────
+const DEFAULT_SAVE = {
+  wallet: 0,
+  purchased: [],
+  equipped: { jacket: null, skis: null, trail: null, hat: null },
+};
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem('skiChallenge_save');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Merge with defaults so missing fields are filled in
+      return {
+        wallet: parsed.wallet || 0,
+        purchased: parsed.purchased || [],
+        equipped: { ...DEFAULT_SAVE.equipped, ...(parsed.equipped || {}) },
+      };
+    }
+  } catch (e) { console.warn('Save load failed:', e); }
+  return JSON.parse(JSON.stringify(DEFAULT_SAVE));
+}
+
+function writeSave(s) {
+  localStorage.setItem('skiChallenge_save', JSON.stringify(s));
+}
+
+let save = loadSave();
+
+const RAINBOW = [
+  { suffix: 'red',    hex: 0xff1744, label: 'Red' },
+  { suffix: 'orange', hex: 0xff9100, label: 'Orange' },
+  { suffix: 'yellow', hex: 0xffea00, label: 'Yellow' },
+  { suffix: 'green',  hex: 0x00e676, label: 'Green' },
+  { suffix: 'blue',   hex: 0x2979ff, label: 'Blue' },
+  { suffix: 'indigo', hex: 0x651fff, label: 'Indigo' },
+  { suffix: 'violet', hex: 0xd500f9, label: 'Violet' },
+];
+
+const SHOP_ITEMS = [
+  // Jackets — rainbow + gold
+  ...RAINBOW.map(c => ({ id: `jacket_${c.suffix}`, category: 'jacket', name: `${c.label} Jacket`, price: 100, color: c.hex, desc: `${c.label} ski jacket` })),
+  { id: 'jacket_black', category: 'jacket', name: 'Black Jacket', price: 100, color: 0x1a1a1a, desc: 'Sleek all-black look' },
+  { id: 'jacket_white', category: 'jacket', name: 'White Jacket', price: 100, color: 0xf5f5f5, desc: 'Clean white jacket' },
+  { id: 'jacket_lavender', category: 'jacket', name: 'Lavender Jacket', price: 100, color: 0xb388ff, desc: 'Soft lavender jacket' },
+  { id: 'jacket_gold', category: 'jacket', name: 'Gold Jacket', price: 200, color: 0xffd700, desc: 'Shiny gold jacket!', metalness: 0.5 },
+  // Skis — rainbow + black + white + gold
+  ...RAINBOW.map(c => ({ id: `skis_${c.suffix}`, category: 'skis', name: `${c.label} Skis`, price: 100, color: c.hex, desc: `${c.label} colored skis` })),
+  { id: 'skis_black', category: 'skis', name: 'Black Skis', price: 100, color: 0x1a1a1a, desc: 'Stealth black skis' },
+  { id: 'skis_white', category: 'skis', name: 'White Skis', price: 100, color: 0xf5f5f5, desc: 'Snow white skis' },
+  { id: 'skis_lavender', category: 'skis', name: 'Lavender Skis', price: 100, color: 0xb388ff, desc: 'Soft lavender skis' },
+  { id: 'skis_gold', category: 'skis', name: 'Gold Skis', price: 200, color: 0xffd700, desc: 'Pure gold skis!', metalness: 0.7 },
+  // Trails
+  { id: 'trail_gold',   category: 'trail', name: 'Golden Trail',   price: 150, color: 0xffd700, opacity: 0.5, desc: 'Golden shimmer behind you' },
+  { id: 'trail_cyan',   category: 'trail', name: 'Neon Cyan Trail', price: 120, color: 0x00ffff, opacity: 0.45, desc: 'Electric blue-green streaks' },
+  { id: 'trail_pink',   category: 'trail', name: 'Pink Glitter',    price: 150, color: 0xff69b4, opacity: 0.5, desc: 'Sparkly pink trails' },
+  { id: 'trail_lavender', category: 'trail', name: 'Lavender Trail', price: 120, color: 0xb388ff, opacity: 0.45, desc: 'Soft lavender swirls' },
+  // Hats
+  { id: 'hat_crown',     category: 'hat', name: 'Royal Crown',    price: 500, desc: 'Ski like royalty!' },
+  { id: 'hat_propeller', category: 'hat', name: 'Propeller Cap',  price: 300, desc: 'Silly spinning propeller!' },
+  { id: 'hat_penguin',   category: 'hat', name: 'Penguin Hat',    price: 250, desc: 'Cute penguin on your head!' },
+  { id: 'hat_polar_bear', category: 'hat', name: 'Polar Bear Hat', price: 250, desc: 'Fluffy polar bear ears!' },
+];
+
+let activeShopCategory = 'jacket';
+let shopReturnTo = 'start';
+
+function updateStartWallet() {
+  const el = document.getElementById('start-wallet');
+  if (el) el.textContent = save.wallet;
+}
+
+// ── Trail Map ───────────────────────────────────────
+function renderTrailMap() {
+  const svg = document.getElementById('trail-map-svg');
+  const runsContainer = document.getElementById('trail-map-runs');
+  if (!svg || !runsContainer) return;
+  svg.innerHTML = '';
+  runsContainer.innerHTML = '';
+
+  RUN_ORDER.forEach(runId => {
+    const config = RUN_CONFIGS[runId];
+    const path = config.mapPath;
+
+    // SVG polyline for the run path
+    const pointsStr = path.points.map(p => `${p[0] * 100},${p[1] * 100}`).join(' ');
+    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    polyline.setAttribute('points', pointsStr);
+    polyline.setAttribute('stroke', path.color);
+    if (config.difficulty.includes('black')) {
+      polyline.setAttribute('stroke-dasharray', '1.5,0.8');
+    }
+    svg.appendChild(polyline);
+
+    // Clickable marker at the top of the path
+    const topPoint = path.points[0];
+    const marker = document.createElement('div');
+    marker.className = 'run-marker' + (runId === selectedRun ? ' selected' : '');
+    marker.style.left = `${topPoint[0] * 100}%`;
+    marker.style.top = `${topPoint[1] * 100}%`;
+    marker.style.background = path.color;
+    marker.dataset.run = runId;
+    marker.onclick = () => selectRun(runId);
+
+    const label = document.createElement('div');
+    label.className = 'run-marker-label';
+    label.textContent = config.name;
+    marker.appendChild(label);
+    runsContainer.appendChild(marker);
+  });
+
+  // Update info panel for currently selected run
+  selectRun(selectedRun);
+}
+
+function selectRun(runId) {
+  selectedRun = runId;
+  const config = RUN_CONFIGS[runId];
+
+  // Update markers
+  document.querySelectorAll('.run-marker').forEach(m => {
+    m.classList.toggle('selected', m.dataset.run === runId);
+  });
+
+  // Update info panel
+  const nameEl = document.getElementById('run-info-name');
+  const diffEl = document.getElementById('run-info-difficulty');
+  const descEl = document.getElementById('run-info-desc');
+  const statsEl = document.getElementById('run-info-stats');
+  if (nameEl) nameEl.textContent = config.name;
+  if (diffEl) diffEl.textContent = config.difficultyLabel;
+  if (descEl) descEl.textContent = config.description;
+  if (statsEl) statsEl.innerHTML =
+    `<span>Length: ${config.length}m</span><span>Stars: ${config.totalStars}</span><span>Lives: ${config.lives}</span>`;
+}
+
+function openShop(returnTo) {
+  shopReturnTo = returnTo || 'start';
+  save = loadSave();
+  // Hide the screen that opened the shop
+  if (returnTo === 'complete') document.getElementById('level-complete').classList.remove('active');
+  if (returnTo === 'gameover') document.getElementById('game-over').style.display = 'none';
+  renderShopItems('jacket');
+  document.getElementById('shop-overlay').classList.add('active');
+  document.getElementById('shop-wallet-display').textContent = save.wallet;
+}
+
+function closeShop() {
+  document.getElementById('shop-overlay').classList.remove('active');
+  if (shopReturnTo === 'complete') document.getElementById('level-complete').classList.add('active');
+  else if (shopReturnTo === 'gameover') document.getElementById('game-over').style.display = 'flex';
+  updateStartWallet();
+}
+
+function renderShopItems(category) {
+  activeShopCategory = category;
+  document.querySelectorAll('.shop-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.category === category);
+  });
+  const container = document.getElementById('shop-items');
+  const items = SHOP_ITEMS.filter(i => i.category === category);
+  container.innerHTML = items.map(item => {
+    const owned = save.purchased.includes(item.id);
+    const equipped = save.equipped[item.category] === item.id;
+    const canAfford = save.wallet >= item.price;
+
+    let preview = '';
+    if (item.color !== undefined) {
+      const hex = '#' + item.color.toString(16).padStart(6, '0');
+      preview = `<div class="shop-item-preview" style="background:${hex};"></div>`;
+    } else if (item.id === 'hat_crown') {
+      preview = `<div class="shop-item-preview" style="background:linear-gradient(135deg,#ffd700,#ffb800);font-size:1.5rem;display:flex;align-items:center;justify-content:center;">👑</div>`;
+    } else if (item.id === 'hat_propeller') {
+      preview = `<div class="shop-item-preview" style="background:linear-gradient(135deg,#4fc3f7,#2196f3);font-size:1.5rem;display:flex;align-items:center;justify-content:center;">🧢</div>`;
+    } else if (item.id === 'hat_penguin') {
+      preview = `<div class="shop-item-preview" style="background:linear-gradient(135deg,#263238,#455a64);font-size:1.5rem;display:flex;align-items:center;justify-content:center;">🐧</div>`;
+    } else if (item.id === 'hat_polar_bear') {
+      preview = `<div class="shop-item-preview" style="background:linear-gradient(135deg,#eceff1,#cfd8dc);font-size:1.5rem;display:flex;align-items:center;justify-content:center;">🐻‍❄️</div>`;
+    }
+
+    let btn = '';
+    if (equipped) {
+      btn = `<button class="shop-item-btn equipped">Equipped</button>`;
+    } else if (owned) {
+      btn = `<button class="shop-item-btn equip" onclick="equipItem('${item.id}')">Equip</button>`;
+    } else if (canAfford) {
+      btn = `<button class="shop-item-btn buy" onclick="buyItem('${item.id}')">🪙 ${item.price}</button>`;
+    } else {
+      btn = `<button class="shop-item-btn buy too-expensive">🪙 ${item.price}</button>`;
+    }
+
+    return `<div class="shop-item">${preview}<div class="shop-item-name">${item.name}</div><div class="shop-item-desc">${item.desc}</div>${btn}</div>`;
+  }).join('');
+}
+
+function buyItem(itemId) {
+  const item = SHOP_ITEMS.find(i => i.id === itemId);
+  if (!item || save.wallet < item.price || save.purchased.includes(itemId)) return;
+  save.wallet -= item.price;
+  save.purchased.push(itemId);
+  save.equipped[item.category] = itemId;
+  writeSave(save);
+  applyCosmetics();
+  renderShopItems(activeShopCategory);
+  document.getElementById('shop-wallet-display').textContent = save.wallet;
+}
+
+function equipItem(itemId) {
+  const item = SHOP_ITEMS.find(i => i.id === itemId);
+  if (!item || !save.purchased.includes(itemId)) return;
+  save.equipped[item.category] = save.equipped[item.category] === itemId ? null : itemId;
+  writeSave(save);
+  applyCosmetics();
+  renderShopItems(activeShopCategory);
+}
+
+// ── Slope ────────────────────────────────────────────
+function createSlope(config) {
+  const w = config?.slopeWidth || 180;
+  const len = (config?.length || 700) * 2.2;
+  const halfW = w / 2;
+  const geo = new THREE.PlaneGeometry(w, len, 100, 200);
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    let z = Math.sin(x * 0.04) * 0.2 + Math.sin(y * 0.02 + x * 0.03) * 0.15
+      + Math.sin(x * 0.12) * 0.05 + Math.sin(y * 0.06) * 0.08;
+    const edge = Math.abs(x) / halfW;
+    if (edge > 0.4) z += Math.pow((edge - 0.4) * 1.5, 2) * 6;
+    // Cliff walls for narrow runs
+    if (config && config.playableHalfWidth < 15) {
+      const cEdge = Math.abs(x) / (config.playableHalfWidth + 4);
+      if (cEdge > 1.0) z += Math.pow((cEdge - 1.0) * 3, 2) * 8;
+    }
+    pos.setZ(i, z);
+  }
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({ color: 0xedf3f7, roughness: 0.72, metalness: 0.02 });
+  const slope = new THREE.Mesh(geo, mat);
+  slope.rotation.x = -Math.PI / 2;
+  slope.receiveShadow = true;
+  scene.add(slope);
+  worldObjects.push(slope);
+
+  // Groomed lines
+  const [glMin, glMax] = config?.groomLineRange || [-14, 14];
+  for (let lx = glMin; lx <= glMax; lx += 2.5) {
+    const lg = new THREE.PlaneGeometry(0.08, len);
+    const lm = new THREE.MeshStandardMaterial({ color: 0xd5e3ec, roughness: 0.9, transparent: true, opacity: 0.35 });
+    const line = new THREE.Mesh(lg, lm);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(lx, 0.03, 0);
+    scene.add(line);
+    worldObjects.push(line);
+  }
+}
+
+// ── Detailed Pine Tree ───────────────────────────────
+function createPineTree(x, z, scale) {
+  const s = scale || (0.8 + Math.random() * 0.7);
+  const group = new THREE.Group();
+
+  // Trunk with bark texture feel
+  const trunkH = 3 * s;
+  const trunkGeo = new THREE.CylinderGeometry(0.12 * s, 0.28 * s, trunkH, 8);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.95 });
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.position.y = trunkH / 2;
+  trunk.castShadow = true;
+  group.add(trunk);
+
+  // Exposed roots
+  for (let r = 0; r < 3; r++) {
+    const angle = (r / 3) * Math.PI * 2 + Math.random() * 0.5;
+    const rootGeo = new THREE.CylinderGeometry(0.03 * s, 0.08 * s, 0.8 * s, 4);
+    const root = new THREE.Mesh(rootGeo, trunkMat);
+    root.position.set(Math.cos(angle) * 0.2 * s, 0.15 * s, Math.sin(angle) * 0.2 * s);
+    root.rotation.z = Math.cos(angle) * 0.6;
+    root.rotation.x = Math.sin(angle) * 0.6;
+    group.add(root);
+  }
+
+  // Dense foliage layers
+  const layers = 6 + Math.floor(Math.random() * 3);
+  const baseR = (2.0 + Math.random() * 0.8) * s;
+  const treeH = (7 + Math.random() * 3) * s;
+
+  for (let i = 0; i < layers; i++) {
+    const t = i / layers;
+    const ly = trunkH * 0.4 + t * treeH * 0.85;
+    const lr = baseR * (1 - t * 0.75) * (0.8 + Math.random() * 0.4);
+    const lh = (treeH / layers) * 1.8;
+
+    const g = 26 + Math.floor(Math.random() * 20);
+    const color = new THREE.Color(`rgb(${10 + Math.floor(Math.random()*15)}, ${55 + g}, ${15 + Math.floor(Math.random()*12)})`);
+
+    const cGeo = new THREE.ConeGeometry(lr, lh, 8);
+    // Slightly randomize vertices for organic look
+    const cPos = cGeo.getAttribute('position');
+    for (let v = 0; v < cPos.count; v++) {
+      if (cPos.getY(v) < lh * 0.4) {
+        cPos.setX(v, cPos.getX(v) + (Math.random() - 0.5) * lr * 0.15);
+        cPos.setZ(v, cPos.getZ(v) + (Math.random() - 0.5) * lr * 0.15);
+      }
+    }
+    cGeo.computeVertexNormals();
+
+    const cone = new THREE.Mesh(cGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.88 }));
+    cone.position.y = ly;
+    cone.rotation.y = Math.random() * Math.PI;
+    cone.castShadow = true;
+    cone.receiveShadow = true;
+    group.add(cone);
+  }
+
+  // Snow clumps on branches
+  const clumps = 4 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < clumps; i++) {
+    const t = 0.2 + Math.random() * 0.6;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = baseR * (1 - t * 0.6) * 0.55;
+    const sy = trunkH * 0.4 + t * treeH * 0.85;
+    const size = (0.3 + Math.random() * 0.5) * s;
+
+    const sGeo = new THREE.SphereGeometry(size, 6, 5);
+    const sMat = new THREE.MeshStandardMaterial({ color: 0xf0f5f9, roughness: 0.65 });
+    const snow = new THREE.Mesh(sGeo, sMat);
+    snow.position.set(Math.cos(ang) * dist, sy + size * 0.2, Math.sin(ang) * dist);
+    snow.scale.y = 0.35;
+    group.add(snow);
+  }
+
+  // Top snow cap
+  const topSnow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.4 * s, 0.6 * s, 6),
+    new THREE.MeshStandardMaterial({ color: 0xf5f9fc, roughness: 0.6 })
+  );
+  topSnow.position.y = trunkH * 0.4 + treeH * 0.9;
+  group.add(topSnow);
+
+  group.position.set(x, 0, z);
+  group.userData = { type: 'tree', radius: 1.4 * s };
+  scene.add(group);
+  obstacles.push(group);
+  worldObjects.push(group);
+}
+
+// ── Rock ─────────────────────────────────────────────
+function createRock(x, z) {
+  const group = new THREE.Group();
+  const s = 0.5 + Math.random() * 0.9;
+
+  // Multiple rock chunks clustered
+  const chunks = 1 + Math.floor(Math.random() * 3);
+  for (let c = 0; c < chunks; c++) {
+    const rGeo = new THREE.DodecahedronGeometry(1.2 * s * (c === 0 ? 1 : 0.5 + Math.random() * 0.4), 1);
+    const rPos = rGeo.getAttribute('position');
+    for (let i = 0; i < rPos.count; i++) {
+      rPos.setX(i, rPos.getX(i) + (Math.random() - 0.5) * 0.4 * s);
+      rPos.setY(i, rPos.getY(i) * 0.5 + (Math.random() - 0.5) * 0.2 * s);
+      rPos.setZ(i, rPos.getZ(i) + (Math.random() - 0.5) * 0.4 * s);
+    }
+    rGeo.computeVertexNormals();
+    const gray = 0.32 + Math.random() * 0.18;
+    const rock = new THREE.Mesh(rGeo, new THREE.MeshStandardMaterial({
+      color: new THREE.Color(gray, gray * 0.93, gray * 1.05), roughness: 0.93, metalness: 0.04
+    }));
+    rock.position.set(c === 0 ? 0 : (Math.random() - 0.5) * s, 0.6 * s, c === 0 ? 0 : (Math.random() - 0.5) * s);
+    rock.rotation.y = Math.random() * Math.PI;
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    group.add(rock);
+  }
+
+  // Snow on top
+  const sGeo = new THREE.SphereGeometry(1.0 * s, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.35);
+  const snow = new THREE.Mesh(sGeo, new THREE.MeshStandardMaterial({ color: 0xedf3f7, roughness: 0.65 }));
+  snow.position.y = 0.9 * s;
+  group.add(snow);
+
+  group.position.set(x, -0.6 * s, z);
+  group.rotation.y = Math.random() * Math.PI;
+  group.userData = { type: 'rock', radius: 1.3 * s };
+  scene.add(group);
+  obstacles.push(group);
+  worldObjects.push(group);
+}
+
+// ── Realistic Skier Builder (procedural fallback + NPC) ──
+function buildSkierModel(opts) {
+  const g = new THREE.Group();
+  const {
+    jacketColor = 0xe53935,
+    pantsColor = 0x1a1a2e,
+    helmetColor = 0x1a237e,
+    goggleColor = 0xff9800,
+    skiColor = 0x0d47a1,
+    scarfColor = 0xffd700,
+    hasScarf = false,
+    hasPompom = false,
+    pompomColor = 0xffffff,
+    scale = 1,
+  } = opts;
+
+  const s = scale;
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf0c8a0, roughness: 0.6 });
+  const jacketMat = new THREE.MeshStandardMaterial({ color: jacketColor, roughness: 0.45, metalness: 0.02 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.5 });
+
+  // ── LEGS — realistic proportions ──
+  [-0.1, 0.1].forEach(lx => {
+    const uleg = new THREE.Mesh(new THREE.CylinderGeometry(0.09*s, 0.08*s, 0.5*s, 10), pantsMat);
+    uleg.position.set(lx*s, 0.6*s, 0);
+    uleg.castShadow = true;
+    g.add(uleg);
+    const lleg = new THREE.Mesh(new THREE.CylinderGeometry(0.07*s, 0.065*s, 0.48*s, 10), pantsMat);
+    lleg.position.set(lx*s, 0.2*s, 0);
+    lleg.castShadow = true;
+    g.add(lleg);
+  });
+
+  // ── BOOTS ──
+  const bootMat = new THREE.MeshStandardMaterial({ color: 0x2c2220, roughness: 0.45, metalness: 0.05 });
+  [-0.1, 0.1].forEach(bx => {
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.1*s, 0.12*s, 0.18*s), bootMat);
+    boot.position.set(bx*s, 0.04*s, 0.02*s);
+    boot.castShadow = true;
+    g.add(boot);
+  });
+
+  // ── TORSO ──
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17*s, 0.15*s, 0.55*s, 10), jacketMat);
+  torso.position.y = 1.1*s;
+  torso.castShadow = true;
+  torso.userData.cosmeticRole = 'jacket';
+  g.add(torso);
+
+  // ── ARMS — tucked ski stance ──
+  [-1, 1].forEach(side => {
+    // Upper arm — close to body, angled down and forward
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.055*s, 0.05*s, 0.4*s, 8), jacketMat);
+    arm.position.set(side*0.2*s, 0.95*s, 0.06*s);
+    arm.rotation.z = side * 0.8;
+    arm.rotation.x = 0.5;
+    arm.castShadow = true;
+    arm.userData.cosmeticRole = 'jacket';
+    g.add(arm);
+    // Forearm — bent at elbow, hands forward holding poles
+    const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.045*s, 0.04*s, 0.3*s, 8), jacketMat);
+    forearm.position.set(side*0.22*s, 0.72*s, 0.18*s);
+    forearm.rotation.z = side * 0.2;
+    forearm.rotation.x = 0.8;
+    forearm.userData.cosmeticRole = 'jacket';
+    g.add(forearm);
+    // Glove
+    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.045*s, 8, 6), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 }));
+    glove.position.set(side*0.22*s, 0.58*s, 0.28*s);
+    g.add(glove);
+    // Pole — angled back from hands
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.2, metalness: 0.65 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.01*s, 0.01*s, 1.3*s, 5), poleMat);
+    pole.position.set(side*0.22*s, 0.2*s, 0.15*s);
+    pole.rotation.x = 0.25;
+    pole.rotation.z = side * 0.1;
+    g.add(pole);
+  });
+
+  // ── NECK + HEAD ──
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06*s, 0.07*s, 0.1*s, 10), skinMat);
+  neck.position.y = 1.45*s;
+  g.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17*s, 14, 12), skinMat);
+  head.position.y = 1.65*s;
+  head.scale.set(1, 1.1, 0.95);
+  head.castShadow = true;
+  g.add(head);
+
+  // ── HELMET ──
+  const helmetMat = new THREE.MeshStandardMaterial({ color: helmetColor, roughness: 0.3, metalness: 0.1 });
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.19*s, 12, 10, 0, Math.PI*2, 0, Math.PI*0.6), helmetMat);
+  helmet.position.y = 1.72*s;
+  helmet.castShadow = true;
+  g.add(helmet);
+
+  // ── GOGGLES ──
+  const gogMat = new THREE.MeshStandardMaterial({ color: goggleColor, roughness: 0.1, metalness: 0.4 });
+  const gogFrame = new THREE.Mesh(new THREE.BoxGeometry(0.28*s, 0.08*s, 0.06*s), gogMat);
+  gogFrame.position.set(0, 1.68*s, 0.14*s);
+  g.add(gogFrame);
+
+  // ── SCARF ──
+  if (hasScarf) {
+    const scarfMat = new THREE.MeshStandardMaterial({ color: scarfColor, roughness: 0.5 });
+    const scarf = new THREE.Mesh(new THREE.TorusGeometry(0.1*s, 0.03*s, 8, 16), scarfMat);
+    scarf.position.y = 1.42*s;
+    scarf.rotation.x = Math.PI / 2;
+    g.add(scarf);
+  }
+  if (hasPompom) {
+    const pom = new THREE.Mesh(new THREE.SphereGeometry(0.06*s, 8, 6), new THREE.MeshStandardMaterial({ color: pompomColor, roughness: 0.9 }));
+    pom.position.y = 1.88*s;
+    g.add(pom);
+  }
+
+  // ── SKIS ──
+  const skiMat = new THREE.MeshStandardMaterial({ color: skiColor, roughness: 0.25, metalness: 0.35 });
+  [-0.1, 0.1].forEach(sx => {
+    const ski = new THREE.Mesh(new THREE.BoxGeometry(0.07*s, 0.025*s, 2.0*s), skiMat);
+    ski.position.set(sx*s, 0.012*s, -0.1*s);
+    ski.castShadow = true;
+    ski.userData.cosmeticRole = 'ski';
+    g.add(ski);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.04*s, 8, 4, 0, Math.PI*2, 0, Math.PI*0.5), skiMat);
+    tip.position.set(sx*s, 0.03*s, -1.1*s);
+    tip.rotation.x = -0.3;
+    tip.userData.cosmeticRole = 'ski';
+    g.add(tip);
+  });
+
+  return g;
+}
+
+// ── Player Skier ─────────────────────────────────────
+let skier;
+let rothModel = null;
+let rothMixer = null;
+let modelLoaded = false;
+
+// Luxury casual ski palette
+const luxuryPalette = {
+  jacket: 0xc4a882,    // Warm taupe / camel
+  pants: 0x1a1a1a,     // Jet black
+  boots: 0x2c2220,     // Dark espresso
+  helmet: 0xf5f0e8,    // Cream / off-white
+  goggles: 0xb08d57,   // Gold-tone
+  skin: 0xf0c8a0,      // Warm skin
+  hair: 0x3b2a1a,      // Dark brown
+  skiColor: 0x1a1a1a,  // Matte black skis
+};
+
+function addSkiEquipment(group) {
+  // Matte black skis with gold accents
+  const skiMat = new THREE.MeshStandardMaterial({ color: luxuryPalette.skiColor, roughness: 0.25, metalness: 0.4 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.2, metalness: 0.7 });
+  [-0.12, 0.12].forEach(sx => {
+    const ski = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.025, 2.0), skiMat);
+    ski.position.set(sx, 0.012, -0.05);
+    ski.castShadow = true;
+    ski.userData.cosmeticRole = 'ski';
+    group.add(ski);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.028, 1.6), accentMat);
+    stripe.position.set(sx, 0.015, -0.05);
+    group.add(stripe);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 4, 0, Math.PI*2, 0, Math.PI*0.5), skiMat);
+    tip.position.set(sx, 0.03, -1.05);
+    tip.rotation.x = -0.3;
+    tip.userData.cosmeticRole = 'ski';
+    group.add(tip);
+    const bind = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.1), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.3 }));
+    bind.position.set(sx, 0.05, 0);
+    group.add(bind);
+  });
+  // Silver poles
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.2, metalness: 0.65 });
+  [-1, 1].forEach(side => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.6, 5), poleMat);
+    pole.position.set(side * 0.35, 0.4, 0.12);
+    pole.rotation.x = 0.15;
+    pole.rotation.z = side * 0.06;
+    group.add(pole);
+    const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.008, 8), poleMat);
+    basket.position.set(side * 0.37, 0.02, 0.22);
+    group.add(basket);
+  });
+}
+
+function addHelmetAndGoggles(group, headY) {
+  const y = headY || 1.72;
+  // Cream helmet
+  const helmetMat = new THREE.MeshStandardMaterial({ color: luxuryPalette.helmet, roughness: 0.3, metalness: 0.1 });
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10, 0, Math.PI*2, 0, Math.PI*0.6), helmetMat);
+  helmet.position.y = y + 0.08;
+  helmet.castShadow = true;
+  group.add(helmet);
+  // Gold goggles
+  const gogMat = new THREE.MeshStandardMaterial({ color: luxuryPalette.goggles, roughness: 0.1, metalness: 0.5 });
+  const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.06), gogMat);
+  goggles.position.set(0, y + 0.04, 0.16);
+  group.add(goggles);
+  // Goggle strap
+  const strapMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
+  [-0.17, 0.17].forEach(sx => {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.06, 0.4), strapMat);
+    strap.position.set(sx, y + 0.04, 0);
+    group.add(strap);
+  });
+}
+
+function addLongHair(group, headY) {
+  const y = headY || 1.72;
+  const hairMat = new THREE.MeshStandardMaterial({ color: luxuryPalette.hair, roughness: 0.8 });
+  // Main volume
+  const hairBack = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.05, 0.9, 10), hairMat);
+  hairBack.position.set(0, y - 0.45, -0.1);
+  hairBack.rotation.x = 0.18;
+  hairBack.castShadow = true;
+  group.add(hairBack);
+  // Flowing strands
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 1.2 - Math.PI * 0.6;
+    const len = 0.6 + Math.random() * 0.4;
+    const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.012, len, 6), hairMat);
+    strand.position.set(Math.sin(angle) * 0.12, y - 0.5 - len * 0.25, -0.1 + Math.cos(angle) * 0.05);
+    strand.rotation.x = 0.15 + Math.random() * 0.12;
+    strand.rotation.z = Math.sin(angle) * 0.2;
+    strand.castShadow = true;
+    group.add(strand);
+  }
+  // Side pieces framing face
+  [-1, 1].forEach(side => {
+    const sideHair = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.02, 0.65, 6), hairMat);
+    sideHair.position.set(side * 0.16, y - 0.35, 0.04);
+    sideHair.rotation.z = side * 0.15;
+    sideHair.castShadow = true;
+    group.add(sideHair);
+  });
+}
+
+function restyleRothModel(model) {
+  // Restyle Mixamo Roth with luxury ski fashion materials
+  const meshStyles = {
+    'Ch13_Shirt': { color: luxuryPalette.jacket, roughness: 0.42, metalness: 0.02 },   // Taupe jacket
+    'Ch13_Pants': { color: luxuryPalette.pants, roughness: 0.48, metalness: 0.0 },       // Black ski pants
+    'Ch13_Shoe':  { color: luxuryPalette.boots, roughness: 0.45, metalness: 0.05 },      // Dark boots
+    'Ch13_Body':  { color: luxuryPalette.skin, roughness: 0.55, metalness: 0.0 },        // Skin
+    'Ch13_Hair':  { color: luxuryPalette.hair, roughness: 0.75, metalness: 0.0 },        // Brown hair
+    'Ch13_Eyeleashes': { color: 0x1a1008, roughness: 0.4, metalness: 0.0 },              // Dark lashes
+  };
+
+  model.traverse(child => {
+    if (child.isMesh || child.isSkinnedMesh) {
+      console.log('  Mesh found:', child.name, '| type:', child.type, '| original mat:', child.material?.name);
+      child.castShadow = true;
+      child.receiveShadow = true;
+      child.frustumCulled = false;
+      // Find matching style by mesh name
+      const style = meshStyles[child.name];
+      if (style) {
+        console.log('    -> Applying style:', child.name, '| color:', style.color.toString(16));
+        child.material = new THREE.MeshStandardMaterial({
+          color: style.color,
+          roughness: style.roughness,
+          metalness: style.metalness,
+          side: THREE.DoubleSide,
+        });
+        if (child.name === 'Ch13_Shirt') child.userData.cosmeticRole = 'jacket';
+      } else {
+        console.log('    -> NO MATCH, using default skin for:', child.name);
+        // Default: make visible with skin color
+        child.material = new THREE.MeshStandardMaterial({
+          color: luxuryPalette.skin,
+          roughness: 0.55,
+          side: THREE.DoubleSide,
+        });
+      }
+    }
+  });
+}
+
+// ── Cosmetics ────────────────────────────────────────
+let hatMesh = null;
+
+function buildCrown() {
+  const g = new THREE.Group();
+  g.userData.cosmeticRole = 'hat';
+  const hatY = modelLoaded ? 1.84 : 1.92;
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.2, metalness: 0.8 });
+  const base = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 8, 16), baseMat);
+  base.position.y = hatY;
+  base.rotation.x = Math.PI / 2;
+  g.add(base);
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const point = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), baseMat);
+    point.position.set(Math.cos(angle) * 0.14, hatY + 0.08, Math.sin(angle) * 0.14);
+    g.add(point);
+  }
+  const gem = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), new THREE.MeshStandardMaterial({ color: 0xe53935, emissive: 0xe53935, emissiveIntensity: 0.4, roughness: 0.1, metalness: 0.3 }));
+  gem.position.set(0, hatY + 0.06, 0.14);
+  g.add(gem);
+  return g;
+}
+
+function buildPropellerCap() {
+  const g = new THREE.Group();
+  g.userData.cosmeticRole = 'hat';
+  const hatY = modelLoaded ? 1.84 : 1.92;
+  const beanie = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), new THREE.MeshStandardMaterial({ color: 0x2196f3, roughness: 0.7 }));
+  beanie.position.y = hatY + 0.02;
+  g.add(beanie);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.06, 8), new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.6, roughness: 0.2 }));
+  hub.position.y = hatY + 0.16;
+  g.add(hub);
+  const propGroup = new THREE.Group();
+  propGroup.position.y = hatY + 0.18;
+  propGroup.userData.isPropeller = true;
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff5722, roughness: 0.4 });
+  for (let i = 0; i < 4; i++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.005, 0.04), bladeMat);
+    blade.rotation.y = (i / 4) * Math.PI;
+    propGroup.add(blade);
+  }
+  g.add(propGroup);
+  return g;
+}
+
+function buildPenguinHat() {
+  const g = new THREE.Group();
+  g.userData.cosmeticRole = 'hat';
+  const hatY = modelLoaded ? 1.84 : 1.92;
+  // Penguin body (black)
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.6 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.12, 8, 8), bodyMat);
+  body.position.y = hatY + 0.1;
+  g.add(body);
+  // White belly
+  const bellyMat = new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.6 });
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), bellyMat);
+  belly.position.set(0, hatY + 0.06, 0.06);
+  belly.scale.set(0.8, 1, 0.5);
+  g.add(belly);
+  // Eyes
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  [-0.035, 0.035].forEach(ex => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), eyeMat);
+    eye.position.set(ex, hatY + 0.14, 0.08);
+    g.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 6), pupilMat);
+    pupil.position.set(ex, hatY + 0.14, 0.095);
+    g.add(pupil);
+  });
+  // Beak
+  const beakMat = new THREE.MeshStandardMaterial({ color: 0xff8f00, roughness: 0.4 });
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.04, 4), beakMat);
+  beak.position.set(0, hatY + 0.1, 0.1);
+  beak.rotation.x = Math.PI / 2;
+  g.add(beak);
+  // Feet
+  [-0.04, 0.04].forEach(fx => {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.03), beakMat);
+    foot.position.set(fx, hatY - 0.02, 0.04);
+    g.add(foot);
+  });
+  return g;
+}
+
+function buildPolarBearHat() {
+  const g = new THREE.Group();
+  g.userData.cosmeticRole = 'hat';
+  const hatY = modelLoaded ? 1.84 : 1.92;
+  const furMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.85 });
+  // Beanie base
+  const beanie = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), furMat);
+  beanie.position.y = hatY + 0.02;
+  g.add(beanie);
+  // Round ears
+  [-0.12, 0.12].forEach(ex => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), furMat);
+    ear.position.set(ex, hatY + 0.14, -0.02);
+    g.add(ear);
+    const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshStandardMaterial({ color: 0xffccbc, roughness: 0.7 }));
+    innerEar.position.set(ex, hatY + 0.14, 0.01);
+    g.add(innerEar);
+  });
+  // Nose
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.4 }));
+  nose.position.set(0, hatY + 0.06, 0.14);
+  g.add(nose);
+  // Eyes
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  [-0.045, 0.045].forEach(ex => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 6), eyeMat);
+    eye.position.set(ex, hatY + 0.1, 0.12);
+    g.add(eye);
+  });
+  return g;
+}
+
+function applyCosmetics() {
+  if (!skier) return;
+  const jacketItem = save.equipped.jacket ? SHOP_ITEMS.find(i => i.id === save.equipped.jacket) : null;
+  const jacketColor = jacketItem ? jacketItem.color : luxuryPalette.jacket;
+  const jacketMetal = jacketItem?.metalness || 0.02;
+  const skiItem = save.equipped.skis ? SHOP_ITEMS.find(i => i.id === save.equipped.skis) : null;
+  const skiColor = skiItem ? skiItem.color : luxuryPalette.skiColor;
+  const skiMetal = skiItem?.metalness || 0.4;
+
+  skier.traverse(child => {
+    if (!child.isMesh) return;
+    const role = child.userData.cosmeticRole;
+    if (role === 'jacket' && child.material) {
+      child.material.color.setHex(jacketColor);
+      child.material.metalness = jacketMetal;
+    }
+    if (role === 'ski' && child.material) {
+      child.material.color.setHex(skiColor);
+      child.material.metalness = skiMetal;
+    }
+  });
+
+  // Roth model shirt
+  if (rothModel) {
+    rothModel.traverse(child => {
+      if (child.isMesh && child.name === 'Ch13_Shirt' && child.material) {
+        child.material.color.setHex(jacketColor);
+        child.material.metalness = jacketMetal;
+      }
+    });
+  }
+
+  // Hat
+  if (hatMesh) { skier.remove(hatMesh); hatMesh = null; }
+  if (save.equipped.hat === 'hat_crown') { hatMesh = buildCrown(); skier.add(hatMesh); }
+  else if (save.equipped.hat === 'hat_propeller') { hatMesh = buildPropellerCap(); skier.add(hatMesh); }
+  else if (save.equipped.hat === 'hat_penguin') { hatMesh = buildPenguinHat(); skier.add(hatMesh); }
+  else if (save.equipped.hat === 'hat_polar_bear') { hatMesh = buildPolarBearHat(); skier.add(hatMesh); }
+}
+
+function createPlayerSkier() {
+  // Create a container group — this is what game code moves
+  skier = new THREE.Group();
+  skier.position.set(0, 0, 0);
+  scene.add(skier);
+
+  // Load Roth GLB model
+  const loader = new GLTFLoader();
+  loader.load('roth.glb', (gltf) => {
+    rothModel = gltf.scene;
+    // Measure bounding box at native scale first (Mixamo = cm)
+    const boxNative = new THREE.Box3().setFromObject(rothModel);
+    const nativeHeight = boxNative.max.y - boxNative.min.y;
+    console.log('Native model height:', nativeHeight.toFixed(2), 'units');
+    // Target ~1.7 game units tall
+    const targetHeight = 1.7;
+    const scaleFactor = targetHeight / nativeHeight;
+    rothModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    // Recompute bounding box after scale
+    const box2 = new THREE.Box3().setFromObject(rothModel);
+    rothModel.position.y = -box2.min.y; // Plant feet on ground
+
+    // Restyle with luxury ski fashion
+    restyleRothModel(rothModel);
+
+    // Add helmet, goggles, and hair on top of the Roth head
+    const scaledHeight = box2.max.y - box2.min.y;
+    const headY = rothModel.position.y + scaledHeight * 0.92;
+    addHelmetAndGoggles(skier, headY);
+    addLongHair(skier, headY);
+
+    // Pose the skeleton — fix T-pose into relaxed ski stance
+    rothModel.traverse(child => {
+      if (child.isBone) {
+        const n = child.name.toLowerCase();
+        // Log bone names for debugging
+        if (n.includes('arm') || n.includes('shoulder') || n.includes('hand') || n.includes('elbow') || n.includes('spine') || n.includes('leg') || n.includes('knee'))
+          console.log('  Bone:', child.name);
+
+        // Upper arms — rotate down from T-pose and slightly forward
+        if (n.includes('leftshoulder') || n.includes('left_shoulder')) {
+          child.rotation.z = 0.4;  // Rotate arm down
+        }
+        if (n.includes('rightshoulder') || n.includes('right_shoulder')) {
+          child.rotation.z = -0.4;
+        }
+        if (n.includes('leftarm') && !n.includes('fore')) {
+          child.rotation.z = 1.1;   // Bring arm down from T
+          child.rotation.x = 0.3;   // Slightly forward
+        }
+        if (n.includes('rightarm') && !n.includes('fore')) {
+          child.rotation.z = -1.1;
+          child.rotation.x = 0.3;
+        }
+        // Forearms — bend elbows forward (holding poles)
+        if (n.includes('leftforearm') || n.includes('left_forearm')) {
+          child.rotation.x = 0.4;
+          child.rotation.z = 0.3;
+        }
+        if (n.includes('rightforearm') || n.includes('right_forearm')) {
+          child.rotation.x = 0.4;
+          child.rotation.z = -0.3;
+        }
+        // Slight knee bend for ski stance
+        if (n.includes('leftleg') && !n.includes('up')) {
+          child.rotation.x = 0.15;
+        }
+        if (n.includes('rightleg') && !n.includes('up')) {
+          child.rotation.x = 0.15;
+        }
+        // Slight forward lean at spine
+        if (n.includes('spine') && !n.includes('spine1') && !n.includes('spine2')) {
+          child.rotation.x = 0.08;
+        }
+      }
+    });
+
+    skier.add(rothModel);
+    addSkiEquipment(skier);
+    modelLoaded = true;
+    applyCosmetics();
+    console.log('Roth model loaded! Native height:', nativeHeight.toFixed(2), '-> scale:', scaleFactor.toFixed(6));
+    console.log('BBox after scale min:', box2.min.x.toFixed(3), box2.min.y.toFixed(3), box2.min.z.toFixed(3));
+    console.log('BBox after scale max:', box2.max.x.toFixed(3), box2.max.y.toFixed(3), box2.max.z.toFixed(3));
+    console.log('Model position.y:', rothModel.position.y.toFixed(3), '| headY:', headY.toFixed(3), '| scaledHeight:', scaledHeight.toFixed(3));
+
+    // Setup animation mixer
+    if (gltf.animations && gltf.animations.length > 0) {
+      rothMixer = new THREE.AnimationMixer(rothModel);
+      gltf.animations.forEach(clip => {
+        rothMixer.clipAction(clip).play();
+      });
+    }
+  }, undefined, (err) => {
+    console.warn('Failed to load roth.glb, using procedural skier:', err.message);
+    // Fallback to procedural skier
+    const fallback = buildSkierModel({
+      jacketColor: luxuryPalette.jacket,
+      pantsColor: luxuryPalette.pants,
+      helmetColor: luxuryPalette.helmet,
+      goggleColor: luxuryPalette.goggles,
+      skiColor: luxuryPalette.skiColor,
+      hasScarf: true, scarfColor: 0xb08d57,
+      scale: 1,
+    });
+    // Move children from fallback into skier
+    while (fallback.children.length > 0) {
+      skier.add(fallback.children[0]);
+    }
+    addLongHair(skier, 1.65);
+    applyCosmetics();
+  });
+}
+
+// ── Mogul ────────────────────────────────────────────
+function createMogul(x, z) {
+  const s = 0.6 + Math.random() * 0.4;
+  const geo = new THREE.SphereGeometry(1.0 * s, 8, 6);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xdce8f0, roughness: 0.75 });
+  const mogul = new THREE.Mesh(geo, mat);
+  mogul.scale.y = 0.35;
+  mogul.position.set(x, 0.15 * s, z);
+  mogul.receiveShadow = true;
+  mogul.userData = { type: 'mogul', radius: 1.2 * s, slowFactor: 0.85 };
+  scene.add(mogul);
+  worldObjects.push(mogul);
+  mogulObjects.push(mogul);
+}
+
+// ── Ice Patch ────────────────────────────────────────
+function createIcePatch(x, z) {
+  const w = 4 + Math.random() * 4;
+  const h = 3 + Math.random() * 3;
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x88ccee, roughness: 0.05, metalness: 0.3,
+    transparent: true, opacity: 0.35,
+  });
+  const patch = new THREE.Mesh(geo, mat);
+  patch.rotation.x = -Math.PI / 2;
+  patch.position.set(x, 0.04, z);
+  patch.userData = { type: 'icePatch', halfWidth: w / 2, halfHeight: h / 2, steerFactor: 0.4 };
+  scene.add(patch);
+  worldObjects.push(patch);
+  icePatchObjects.push(patch);
+}
+
+// ── Cliff Band ───────────────────────────────────────
+function createCliffBand(z, height, halfWidth) {
+  const w = halfWidth * 2 + 10;
+  // Main cliff face — deeper and more visible
+  const geo = new THREE.BoxGeometry(w, height, 4);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x4a4a50, roughness: 0.85 });
+  const cliff = new THREE.Mesh(geo, mat);
+  cliff.position.set(0, -height / 2 + 0.8, z);
+  cliff.castShadow = true;
+  cliff.receiveShadow = true;
+  scene.add(cliff);
+  worldObjects.push(cliff);
+
+  // Snow lip on top edge — bigger and brighter
+  const lipGeo = new THREE.BoxGeometry(w, 0.5, 2.5);
+  const lipMat = new THREE.MeshStandardMaterial({ color: 0xf0f6fa, roughness: 0.5 });
+  const lip = new THREE.Mesh(lipGeo, lipMat);
+  lip.position.set(0, 1.0, z + 2.5);
+  scene.add(lip);
+  worldObjects.push(lip);
+
+  // Landing ramp on the other side — visual cue of where you land
+  const rampGeo = new THREE.BoxGeometry(w * 0.8, 0.4, 3);
+  const rampMat = new THREE.MeshStandardMaterial({ color: 0xdce8f0, roughness: 0.7 });
+  const ramp = new THREE.Mesh(rampGeo, rampMat);
+  ramp.position.set(0, 0.1, z - 10);
+  ramp.rotation.x = 0.15;
+  scene.add(ramp);
+  worldObjects.push(ramp);
+
+  cliffBandObjects.push({ z, height, halfWidth });
+}
+
+// ── Chute Walls ──────────────────────────────────────
+function createChuteWalls(startZ, endZ, halfWidth) {
+  const length = Math.abs(endZ - startZ);
+  const wallH = 6;
+  const wallThickness = 3;
+  [-1, 1].forEach(side => {
+    const wallGeo = new THREE.BoxGeometry(wallThickness, wallH, length);
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x6a6a70, roughness: 0.92 });
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(side * (halfWidth + wallThickness / 2), wallH / 2 - 1, (startZ + endZ) / 2);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+    scene.add(wall);
+    worldObjects.push(wall);
+
+    // Snow cap on top
+    const capGeo = new THREE.BoxGeometry(wallThickness + 0.5, 0.4, length + 1);
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xedf3f7, roughness: 0.6 });
+    const cap = new THREE.Mesh(capGeo, capMat);
+    cap.position.set(side * (halfWidth + wallThickness / 2), wallH - 0.8, (startZ + endZ) / 2);
+    scene.add(cap);
+    worldObjects.push(cap);
+  });
+}
+
+// ── Warning Sign ─────────────────────────────────────
+function createWarningSign(x, z, text) {
+  const group = new THREE.Group();
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.4, metalness: 0.3 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 6), poleMat);
+  pole.position.y = 1.25;
+  group.add(pole);
+
+  const boardGeo = new THREE.BoxGeometry(1.5, 0.8, 0.05);
+  const boardMat = new THREE.MeshStandardMaterial({ color: 0xffa000, roughness: 0.5 });
+  const board = new THREE.Mesh(boardGeo, boardMat);
+  board.position.y = 2.4;
+  group.add(board);
+
+  const triShape = new THREE.Shape();
+  triShape.moveTo(0, 0.25);
+  triShape.lineTo(-0.2, -0.15);
+  triShape.lineTo(0.2, -0.15);
+  triShape.closePath();
+  const triGeo = new THREE.ShapeGeometry(triShape);
+  const triMat = new THREE.MeshStandardMaterial({ color: 0x000000, side: THREE.DoubleSide });
+  const tri = new THREE.Mesh(triGeo, triMat);
+  tri.position.set(0, 2.4, 0.03);
+  group.add(tri);
+
+  group.position.set(x, 0, z);
+  scene.add(group);
+  worldObjects.push(group);
+}
+
+// ── Guide Pole (S-curve markers) ─────────────────────
+function createGuidePole(x, z) {
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xff6d00, roughness: 0.4 });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 6), poleMat);
+  pole.position.set(x, 1, z);
+  pole.castShadow = true;
+  scene.add(pole);
+  worldObjects.push(pole);
+}
+
+// ── S-Curve Path Helper ──────────────────────────────
+function getPathCenterX(z, waypoints) {
+  if (!waypoints || waypoints.length === 0) return 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const wp0 = waypoints[i], wp1 = waypoints[i + 1];
+    if (z <= wp0.z && z >= wp1.z) {
+      const t = (wp0.z - z) / (wp0.z - wp1.z);
+      const smooth = (1 - Math.cos(t * Math.PI)) / 2;
+      return wp0.cx + (wp1.cx - wp0.cx) * smooth;
+    }
+  }
+  if (z > waypoints[0].z) return waypoints[0].cx;
+  return waypoints[waypoints.length - 1].cx;
+}
+
+// ── NPC Skiers ───────────────────────────────────────
+const npcOutfits = [
+  { jacketColor: 0x2196f3, pantsColor: 0x222222, helmetColor: 0xf44336, goggleColor: 0xffeb3b, skiColor: 0x2196f3, hasScarf: true, scarfColor: 0x4caf50, hasPompom: false },
+  { jacketColor: 0x4caf50, pantsColor: 0x37474f, helmetColor: 0xffffff, goggleColor: 0xff5722, skiColor: 0x4caf50, hasScarf: false, hasPompom: true, pompomColor: 0xff5722 },
+  { jacketColor: 0xff9800, pantsColor: 0x1b1b2f, helmetColor: 0x00bcd4, goggleColor: 0xffc107, skiColor: 0xff9800, hasScarf: true, scarfColor: 0x00bcd4, hasPompom: true, pompomColor: 0xffffff },
+  { jacketColor: 0x9c27b0, pantsColor: 0x263238, helmetColor: 0xffeb3b, goggleColor: 0xe91e63, skiColor: 0x9c27b0, hasScarf: false, hasPompom: true, pompomColor: 0xffeb3b },
+  { jacketColor: 0xf44336, pantsColor: 0x212121, helmetColor: 0x1565c0, goggleColor: 0x69f0ae, skiColor: 0x1565c0, hasScarf: true, scarfColor: 0xffffff, hasPompom: false },
+  { jacketColor: 0x00bcd4, pantsColor: 0x1a1a2e, helmetColor: 0xff4081, goggleColor: 0xffd740, skiColor: 0x00bcd4, hasScarf: true, scarfColor: 0xff4081, hasPompom: true, pompomColor: 0xffffff },
+];
+
+function createNPCSkier(x, z) {
+  const outfit = npcOutfits[Math.floor(Math.random() * npcOutfits.length)];
+  const npc = buildSkierModel({ ...outfit, scale: 0.95 });
+  npc.position.set(x, 0, z);
+
+  // NPC movement data
+  const baseSpeed = 0.15 + Math.random() * 0.3;
+  const wobbleFreq = 0.5 + Math.random() * 1.5;
+  const wobbleAmp = 2 + Math.random() * 4;
+  const startX = x;
+
+  npc.userData = {
+    type: 'npcSkier',
+    radius: 1.2,
+    speed: baseSpeed,
+    wobbleFreq,
+    wobbleAmp,
+    startX,
+    time: Math.random() * 100,
+  };
+
+  scene.add(npc);
+  obstacles.push(npc);
+  worldObjects.push(npc);
+  npcSkiers.push(npc);
+}
+
+// ── Gates ────────────────────────────────────────────
+function createGate(x, z) {
+  const group = new THREE.Group();
+  const color = Math.random() > 0.5 ? 0xe53935 : 0x1e88e5;
+  const poleMat = new THREE.MeshStandardMaterial({ color });
+
+  [-2.5, 2.5].forEach(offset => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.2, 6), poleMat);
+    pole.position.set(offset, 1.6, 0);
+    pole.castShadow = true;
+    group.add(pole);
+
+    const flag = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.5, 0.3),
+      new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 0.5 })
+    );
+    flag.position.set(offset + 0.25, 3.0, 0);
+    group.add(flag);
+  });
+
+  group.position.set(x, 0, z);
+  group.userData = { type: 'gate', collected: false, radius: 3.5, baseY: 0 };
+  scene.add(group);
+  collectibles.push(group);
+  worldObjects.push(group);
+}
+
+// ── Star ─────────────────────────────────────────────
+function createStar(x, z) {
+  const group = new THREE.Group();
+  const starShape = new THREE.Shape();
+  const outerR = 0.65, innerR = 0.28, pts = 5;
+  for (let i = 0; i < pts * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i / (pts * 2)) * Math.PI * 2 - Math.PI / 2;
+    if (i === 0) starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  starShape.closePath();
+
+  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04 });
+  const star = new THREE.Mesh(starGeo, new THREE.MeshStandardMaterial({
+    color: 0xffd700, emissive: 0xffa000, emissiveIntensity: 0.5, roughness: 0.2, metalness: 0.8
+  }));
+  star.castShadow = true;
+  group.add(star);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(1.5, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.08 })
+  );
+  group.add(glow);
+
+  group.position.set(x, 2.2, z);
+  group.userData = { type: 'star', collected: false, radius: 1.8, baseY: 2.2 };
+  scene.add(group);
+  collectibles.push(group);
+  worldObjects.push(group);
+}
+
+// ── Coin ─────────────────────────────────────────────
+function createCoin(x, z) {
+  const coin = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.4, 0.4, 0.08, 16),
+    new THREE.MeshStandardMaterial({ color: 0xffc107, emissive: 0xff8f00, emissiveIntensity: 0.15, roughness: 0.3, metalness: 0.85 })
+  );
+  coin.position.set(x, 1.2, z);
+  coin.rotation.x = Math.PI / 2;
+  coin.castShadow = true;
+  coin.userData = { type: 'coin', collected: false, radius: 1.1, baseY: 1.2 };
+  scene.add(coin);
+  collectibles.push(coin);
+  worldObjects.push(coin);
+}
+
+// ── Snow Particles ───────────────────────────────────
+let snowSystem;
+function createSnow() {
+  const count = 1000;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const vels = [];
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * 140;
+    pos[i * 3 + 1] = Math.random() * 45;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * 140;
+    vels.push({ x: (Math.random() - 0.5) * 0.012, y: -(0.012 + Math.random() * 0.025), z: (Math.random() - 0.5) * 0.012 });
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, transparent: true, opacity: 0.55, depthWrite: false }));
+  scene.add(pts);
+  snowSystem = { pts, vels };
+}
+
+// ── Background Mountains — Realistic Layered Panorama ─
+// Store mountain layers for parallax scrolling
+const mountainLayers = { far: [], mid: [], near: [], hills: [] };
+
+function createMountainPeak(x, z, h, r, rockColor, snowLine) {
+  const group = new THREE.Group();
+
+  // Main peak with irregular shape
+  const segments = 7 + Math.floor(Math.random() * 4);
+  const geo = new THREE.ConeGeometry(r, h, segments);
+  const p = geo.getAttribute('position');
+  for (let j = 0; j < p.count; j++) {
+    const px = p.getX(j), py = p.getY(j), pz = p.getZ(j);
+    // More deformation at the base, less at the peak for craggy ridges
+    const heightFactor = (py + h / 2) / h; // 0 at base, 1 at top
+    const deform = r * 0.18 * (1 - heightFactor * 0.6);
+    p.setX(j, px + (Math.random() - 0.5) * deform);
+    p.setZ(j, pz + (Math.random() - 0.5) * deform);
+    // Flatten base slightly
+    if (heightFactor < 0.15) p.setY(j, py - Math.random() * h * 0.05);
+  }
+  geo.computeVertexNormals();
+
+  const rockMat = new THREE.MeshStandardMaterial({ color: rockColor, roughness: 0.92, metalness: 0.02 });
+  const mountain = new THREE.Mesh(geo, rockMat);
+  mountain.position.y = h / 2;
+  group.add(mountain);
+
+  // Snow coverage — larger for peaks above snowLine
+  const snowCoverage = Math.max(0.15, Math.min(0.55, (h - snowLine) / h + 0.1));
+  const snowGeo = new THREE.ConeGeometry(r * (snowCoverage + 0.05), h * snowCoverage, segments);
+  const sp = snowGeo.getAttribute('position');
+  for (let j = 0; j < sp.count; j++) {
+    sp.setX(j, sp.getX(j) + (Math.random() - 0.5) * r * 0.08);
+    sp.setZ(j, sp.getZ(j) + (Math.random() - 0.5) * r * 0.08);
+  }
+  snowGeo.computeVertexNormals();
+  const snowShade = 0.88 + Math.random() * 0.1;
+  const snowMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(snowShade, snowShade + 0.02, snowShade + 0.05),
+    roughness: 0.6, metalness: 0.0
+  });
+  const snow = new THREE.Mesh(snowGeo, snowMat);
+  snow.position.y = h * (1 - snowCoverage * 0.48);
+  group.add(snow);
+
+  // Rock face detail — vertical striations
+  for (let s = 0; s < 2 + Math.floor(Math.random() * 3); s++) {
+    const sAngle = Math.random() * Math.PI * 2;
+    const sH = h * (0.2 + Math.random() * 0.4);
+    const sR = r * (0.08 + Math.random() * 0.12);
+    const ridge = new THREE.Mesh(
+      new THREE.CylinderGeometry(sR * 0.3, sR, sH, 4),
+      new THREE.MeshStandardMaterial({
+        color: rockColor.clone().multiplyScalar(0.85 + Math.random() * 0.2),
+        roughness: 0.95
+      })
+    );
+    ridge.position.set(
+      Math.cos(sAngle) * r * 0.5,
+      h * 0.25 + Math.random() * h * 0.3,
+      Math.sin(sAngle) * r * 0.5
+    );
+    ridge.rotation.set(Math.random() * 0.2, sAngle, Math.random() * 0.15);
+    group.add(ridge);
+  }
+
+  group.position.set(x, -12, z);
+  return group;
+}
+
+function createMountains() {
+  // Each layer is a THREE.Group so we can move the whole layer for parallax
+  // Mountains are placed far from the play area so the player never reaches them
+
+  // Layer 1 — Distant range (far, tall, blue-grey, heavily fogged)
+  const farGroup = new THREE.Group();
+  for (let i = 0; i < 14; i++) {
+    const x = (i - 7) * 70 + (Math.random() - 0.5) * 40;
+    const z = -800 - Math.random() * 400;
+    const h = 80 + Math.random() * 120;
+    const r = 40 + Math.random() * 60;
+    const shade = 0.35 + Math.random() * 0.1;
+    const color = new THREE.Color(shade * 0.55, shade * 0.65, shade * 0.85);
+    const peak = createMountainPeak(x, z, h, r, color, 30);
+    farGroup.add(peak);
+  }
+  scene.add(farGroup);
+  mountainLayers.far.push(farGroup);
+
+  // Layer 2 — Mid range (medium distance, more detail)
+  const midGroup = new THREE.Group();
+  for (let i = 0; i < 12; i++) {
+    const x = (i - 6) * 55 + (Math.random() - 0.5) * 30;
+    const z = -600 - Math.random() * 300;
+    const h = 60 + Math.random() * 80;
+    const r = 30 + Math.random() * 45;
+    const shade = 0.38 + Math.random() * 0.12;
+    const color = new THREE.Color(shade * 0.6, shade * 0.68, shade * 0.82);
+    const peak = createMountainPeak(x, z, h, r, color, 25);
+    midGroup.add(peak);
+  }
+  scene.add(midGroup);
+  mountainLayers.mid.push(midGroup);
+
+  // Layer 3 — Near ridgeline (pushed to sides so they frame the run, not block it)
+  const nearGroup = new THREE.Group();
+  for (let i = 0; i < 10; i++) {
+    // Push x positions to sides — min |x| of 80 so radii don't overlap the ±22 play area
+    const side = i < 5 ? -1 : 1;
+    const x = side * (80 + Math.random() * 120);
+    const z = -400 - Math.random() * 200;
+    const h = 35 + Math.random() * 55;
+    const r = 22 + Math.random() * 35;
+    const shade = 0.4 + Math.random() * 0.15;
+    const color = new THREE.Color(shade * 0.65, shade * 0.7, shade * 0.78);
+    const peak = createMountainPeak(x, z, h, r, color, 20);
+    nearGroup.add(peak);
+  }
+  scene.add(nearGroup);
+  mountainLayers.near.push(nearGroup);
+
+  // Valley floor fill — subtle rolling hills connecting ridges (also pushed to sides)
+  const hillGroup = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const x = side * (60 + Math.random() * 140);
+    const z = -300 - Math.random() * 300;
+    const h = 8 + Math.random() * 15;
+    const r = 30 + Math.random() * 50;
+    const hillGeo = new THREE.ConeGeometry(r, h, 8);
+    const hp = hillGeo.getAttribute('position');
+    for (let j = 0; j < hp.count; j++) {
+      hp.setX(j, hp.getX(j) + (Math.random() - 0.5) * r * 0.2);
+      hp.setZ(j, hp.getZ(j) + (Math.random() - 0.5) * r * 0.2);
+    }
+    hillGeo.computeVertexNormals();
+    const hill = new THREE.Mesh(hillGeo, new THREE.MeshStandardMaterial({
+      color: 0xe0e8ef, roughness: 0.8
+    }));
+    hill.position.set(x, h / 2 - 14, z);
+    hillGroup.add(hill);
+  }
+  scene.add(hillGroup);
+  mountainLayers.hills.push(hillGroup);
+}
+
+// Move mountain layers as parallax — each layer tracks near 1:1 so player never reaches them
+function updateMountains() {
+  if (!skier) return;
+  const pz = skier.position.z;
+  mountainLayers.far.forEach(g => { g.position.z = pz * 0.99; });
+  mountainLayers.mid.forEach(g => { g.position.z = pz * 0.97; });
+  mountainLayers.near.forEach(g => { g.position.z = pz * 0.94; });
+  mountainLayers.hills.forEach(g => { g.position.z = pz * 0.90; });
+}
+
+// ── Ski Trails ───────────────────────────────────────
+function addTrail(x, z) {
+  if (trails.length > 350) { scene.remove(trails.shift()); }
+  const trailItem = save.equipped.trail ? SHOP_ITEMS.find(i => i.id === save.equipped.trail) : null;
+  const trailColor = trailItem ? trailItem.color : 0xd0dfe8;
+  const trailOpacity = trailItem ? trailItem.opacity : 0.3;
+  const t = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.7),
+    new THREE.MeshStandardMaterial({
+      color: trailColor, transparent: true, opacity: trailOpacity, roughness: 1,
+      emissive: trailItem ? trailColor : 0x000000,
+      emissiveIntensity: trailItem ? 0.3 : 0,
+    })
+  );
+  t.rotation.x = -Math.PI / 2;
+  t.position.set(x, 0.025, z);
+  scene.add(t);
+  trails.push(t);
+}
+
+// ── Level Generation ─────────────────────────────────
+function clearWorld() {
+  obstacles.forEach(o => scene.remove(o));
+  collectibles.forEach(c => scene.remove(c));
+  worldObjects.forEach(w => scene.remove(w));
+  obstacles.length = 0;
+  collectibles.length = 0;
+  worldObjects.length = 0;
+  npcSkiers.length = 0;
+  mogulObjects.length = 0;
+  icePatchObjects.length = 0;
+  cliffBandObjects.length = 0;
+  trails.forEach(t => scene.remove(t));
+  trails.length = 0;
+}
+
+function generateLevel(config) {
+  clearWorld();
+  const c = config || RUN_CONFIGS.nellie; // fallback
+  createSlope(c);
+
+  const runLen = c.length + 30;
+  const halfW = c.playableHalfWidth;
+
+  // ── Side forests ──
+  for (let z = 15; z > -runLen; z -= c.sideTreeSpacing) {
+    c.sideForestX.forEach(xOff => {
+      if (Math.random() < c.sideTreeProb) createPineTree(-xOff - Math.random() * 5, z + Math.random() * c.sideTreeSpacing);
+      if (Math.random() < c.sideTreeProb) createPineTree(xOff + Math.random() * 5, z + Math.random() * c.sideTreeSpacing);
+    });
+    // Encroaching trees
+    if (Math.random() < c.encroachProb) {
+      const side = Math.random() > 0.5 ? 1 : -1;
+      createPineTree(side * (c.encroachMinX + Math.random() * 5), z, 0.5 + Math.random() * 0.4);
+    }
+  }
+
+  // ── On-run trees ──
+  for (let z = -18; z > -runLen; z -= c.onRunTreeSpacing) {
+    if (Math.random() < c.onRunTreeProb) {
+      const x = (Math.random() - 0.5) * (halfW * 1.5);
+      if (Math.abs(x) > 2) createPineTree(x, z, 0.4 + Math.random() * 0.5);
+    }
+  }
+
+  // ── Rocks ──
+  if (c.rocks) {
+    for (let z = -25; z > -runLen; z -= (c.rockSpacing || 18)) {
+      if (Math.random() < (c.rockProb || 0.5)) {
+        const x = (Math.random() - 0.5) * (halfW * 1.4);
+        if (Math.abs(x) > 1.5) createRock(x, z);
+      }
+    }
+  }
+
+  // ── Moguls (scattered near gates — 1-2 per gate) ──
+  // Moguls are placed after gates are generated, see below
+
+  // ── Ice patches ──
+  if (c.icePatchProb > 0) {
+    for (let z = -30; z > -runLen; z -= 20) {
+      if (Math.random() < c.icePatchProb) {
+        const x = (Math.random() - 0.5) * (halfW * 1.2);
+        createIcePatch(x, z);
+      }
+    }
+  }
+
+  // ── Cliff bands ──
+  if (c.cliffBands && c.cliffBands.length > 0) {
+    c.cliffBands.forEach(band => createCliffBand(band.z, band.height, halfW));
+  }
+
+  // ── Narrow chute walls ──
+  if (c.narrowChutes && c.narrowChutes.length > 0) {
+    c.narrowChutes.forEach(ch => createChuteWalls(ch.startZ, ch.endZ, ch.halfWidth));
+  }
+
+  // ── No-fall zone warning signs ──
+  if (c.noFallZones && c.noFallZones.length > 0) {
+    c.noFallZones.forEach(zone => {
+      createWarningSign(0, zone.startZ + 5, 'NO FALL ZONE');
+      createWarningSign(-halfW + 2, zone.startZ + 3, '!');
+      createWarningSign(halfW - 2, zone.startZ + 3, '!');
+    });
+  }
+
+  // ── S-curve guide poles ──
+  if (c.sCurveWaypoints) {
+    c.sCurveWaypoints.forEach(wp => {
+      createGuidePole(wp.cx - halfW + 2, wp.z);
+      createGuidePole(wp.cx + halfW - 2, wp.z);
+    });
+  }
+
+  // ── NPC skiers ──
+  for (let z = -30; z > -runLen + 20; z -= c.npcSpacing) {
+    if (Math.random() < c.npcProb) {
+      const x = (Math.random() - 0.5) * (halfW * 1.3);
+      createNPCSkier(x, z);
+    }
+  }
+
+  // ── Gates + coin trails ──
+  const gatePositions = [];
+  if (c.gateZones) {
+    c.gateZones.forEach(g => {
+      createGate(g.x, g.z);
+      gatePositions.push({ x: g.x, z: g.z });
+    });
+  } else if (c.gateSpacing > 0) {
+    for (let z = -35; z > -runLen; z -= c.gateSpacing) {
+      const gx = (Math.random() - 0.5) * (halfW * 0.7);
+      createGate(gx, z);
+      gatePositions.push({ x: gx, z: z });
+    }
+  }
+
+  // Coin trails between gates
+  let prevX = 0;
+  for (let g = 0; g < gatePositions.length; g++) {
+    const gate = gatePositions[g];
+    const startZ = g === 0 ? -8 : gatePositions[g - 1].z - 3;
+    const endZ = gate.z + 3;
+    const totalDist = startZ - endZ;
+    const numCoins = c.coinsPerGate || 3;
+    for (let i = 0; i < numCoins; i++) {
+      const t = (i + 1) / (numCoins + 1);
+      const cz = startZ - t * totalDist;
+      const cx = prevX + (gate.x - prevX) * t;
+      createCoin(Math.max(-halfW * 0.7, Math.min(halfW * 0.7, cx)), cz);
+    }
+    prevX = gate.x;
+  }
+
+  // Bonus coins after last gate
+  if (gatePositions.length > 0) {
+    const lastGate = gatePositions[gatePositions.length - 1];
+    const finishDist = lastGate.z - (-runLen + 10);
+    for (let i = 0; i < 2; i++) {
+      const t = (i + 1) / 3;
+      createCoin(Math.max(-halfW * 0.7, Math.min(halfW * 0.7, lastGate.x)), lastGate.z - 5 - t * Math.abs(finishDist));
+    }
+  }
+
+  // ── Moguls (1-2 scattered near each gate on black runs) ──
+  if (c.moguls && gatePositions.length > 0) {
+    gatePositions.forEach(gate => {
+      const count = 1 + Math.floor(Math.random() * 2); // 1 or 2 moguls per gate
+      for (let i = 0; i < count; i++) {
+        const mx = gate.x + (Math.random() - 0.5) * 8;
+        const mz = gate.z + 3 + Math.random() * 10; // a bit before the gate
+        if (Math.abs(mx) < halfW) createMogul(mx, mz);
+      }
+    });
+  }
+
+  // ── Stars ──
+  for (let i = 0; i < c.totalStars; i++) {
+    const sz = -22 - (i / c.totalStars) * (runLen - 40);
+    const side = i % 2 === 0 ? -1 : 1;
+    const sx = side * (Math.min(halfW * 0.3, 6) + Math.random() * Math.min(halfW * 0.4, 8));
+    createStar(sx, sz);
+  }
+}
+
+// ── Camera ───────────────────────────────────────────
+// Close 3rd-person camera — a couple meters behind and above
+const camOffset = new THREE.Vector3(0, 3.5, 5);
+const camLookAhead = 6;
+
+function updateCamera() {
+  if (!skier) return;
+  let pathCenter = 0;
+  if (currentRunConfig?.sCurveWaypoints) {
+    pathCenter = getPathCenterX(-state.distance, currentRunConfig.sCurveWaypoints);
+  }
+  const blendX = (skier.position.x + pathCenter) * 0.5;
+  const target = new THREE.Vector3(
+    blendX * 0.75,
+    skier.position.y + camOffset.y,
+    skier.position.z + camOffset.z
+  );
+  camera.position.lerp(target, 0.12);
+  camera.lookAt(blendX * 0.85, 1.5, skier.position.z - camLookAhead);
+}
+
+// ── Init ─────────────────────────────────────────────
+createSlope(); // default slope for background behind trail map
+createMountains();
+createSnow();
+createPlayerSkier();
+renderTrailMap();
+updateStartWallet();
+
+// ── Input ────────────────────────────────────────────
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; keys[e.code] = false; });
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Game Flow ────────────────────────────────────────
+let paused = false;
+let pauseStartTime = 0;
+let totalPausedTime = 0;
+
+function startGame() {
+  currentRunConfig = RUN_CONFIGS[selectedRun];
+  const c = currentRunConfig;
+
+  // Apply run-specific state overrides
+  state.totalDistance = c.length;
+  state.baseSpeed = c.baseSpeed;
+  state.maxSpeed = c.maxSpeed;
+  state.minSpeed = c.minSpeed;
+  state.acceleration = c.acceleration;
+  state.maxTurnSpeed = c.maxTurnSpeed;
+  state.totalStars = c.totalStars;
+
+  generateLevel(c);
+
+  paused = false;
+  totalPausedTime = 0;
+  Object.assign(state, {
+    playing: true, speed: state.baseSpeed, turnSpeed: 0, posX: 0,
+    distance: 0, coins: 0, stars: 0, crashes: 0,
+    lives: c.lives || 3,
+    startTime: performance.now(), invincible: false, inNoFallZone: false,
+  });
+  skier.position.set(0, 0, 0);
+  skier.rotation.set(0, 0, 0);
+
+  // Run-specific fog
+  scene.fog = new THREE.FogExp2(0xc8dde9, c.fogDensity || 0.0018);
+
+  // Update HUD with run name
+  const runLabel = document.getElementById('run-name-label');
+  if (runLabel) runLabel.textContent = c.difficultyLabel + ' ' + c.name;
+
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('hud').classList.add('active');
+  document.getElementById('speed-indicator').classList.add('active');
+  document.getElementById('progress-container').classList.add('active');
+  document.getElementById('pause-btn').classList.add('active');
+  document.getElementById('pause-overlay').classList.remove('active');
+  document.getElementById('level-complete').classList.remove('active');
+  document.getElementById('game-over').style.display = 'none';
+  document.getElementById('shop-overlay').classList.remove('active');
+  applyCosmetics();
+}
+
+function restartGame() { startGame(); }
+
+function returnToTrailMap() {
+  state.playing = false;
+  paused = false;
+  document.getElementById('hud').classList.remove('active');
+  document.getElementById('speed-indicator').classList.remove('active');
+  document.getElementById('progress-container').classList.remove('active');
+  document.getElementById('pause-btn').classList.remove('active');
+  document.getElementById('level-complete').classList.remove('active');
+  document.getElementById('game-over').style.display = 'none';
+  document.getElementById('start-screen').classList.remove('hidden');
+  updateStartWallet();
+}
+
+function togglePause() {
+  if (!state.playing) return;
+  paused = !paused;
+  const btn = document.getElementById('pause-btn');
+  const overlay = document.getElementById('pause-overlay');
+  if (paused) {
+    pauseStartTime = performance.now();
+    btn.textContent = '▶ Resume';
+    overlay.classList.add('active');
+  } else {
+    totalPausedTime += performance.now() - pauseStartTime;
+    btn.textContent = '⏸ Pause';
+    overlay.classList.remove('active');
+  }
+}
+
+// Press P or Escape to toggle pause
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && state.playing) {
+    togglePause();
+  }
+});
+
+function completeLevel() {
+  state.playing = false;
+  paused = false;
+  document.getElementById('pause-btn').classList.remove('active');
+  document.getElementById('pause-overlay').classList.remove('active');
+  document.getElementById('final-time').textContent = document.getElementById('timer').textContent;
+  document.getElementById('final-stars').textContent = `${state.stars} / ${state.totalStars}`;
+  document.getElementById('final-coins').textContent = state.coins;
+  document.getElementById('level-complete').classList.add('active');
+  save.wallet += state.coins;
+  writeSave(save);
+}
+
+function triggerCrash() {
+  if (state.invincible) return;
+  state.crashes++;
+  state.lives -= state.inNoFallZone ? 2 : 1; // no-fall zone = double penalty
+  state.speed = state.minSpeed;
+  state.invincible = true;
+  state.invincibleTimer = 70;
+  document.getElementById('crash-overlay').classList.add('flash');
+  setTimeout(() => document.getElementById('crash-overlay').classList.remove('flash'), 350);
+  if (state.lives <= 0) gameOver();
+}
+
+function gameOver() {
+  state.playing = false;
+  paused = false;
+  document.getElementById('pause-btn').classList.remove('active');
+  document.getElementById('pause-overlay').classList.remove('active');
+  const pct = Math.min(100, Math.round((state.distance / state.totalDistance) * 100));
+  document.getElementById('go-distance').textContent = pct + '%';
+  document.getElementById('go-stars').textContent = state.stars + ' / ' + state.totalStars;
+  document.getElementById('go-coins').textContent = state.coins;
+  document.getElementById('game-over').style.display = 'flex';
+  save.wallet += state.coins;
+  writeSave(save);
+}
+
+function updateHUD() {
+  if (!state.playing) return;
+  state.elapsed = (performance.now() - state.startTime - totalPausedTime) / 1000;
+  const m = Math.floor(state.elapsed / 60);
+  const s = Math.floor(state.elapsed % 60).toString().padStart(2, '0');
+  document.getElementById('timer').textContent = `${m}:${s}`;
+  document.getElementById('stars').textContent = `${state.stars} / ${state.totalStars}`;
+  document.getElementById('coins').textContent = state.coins;
+  const maxLives = currentRunConfig?.lives || 3;
+  document.getElementById('lives').textContent = '❤️'.repeat(Math.max(0, state.lives)) + '🖤'.repeat(Math.max(0, maxLives - state.lives));
+  document.getElementById('speed-indicator').textContent = `${Math.round((state.speed / state.maxSpeed) * 55 + 5)} mph`;
+  document.getElementById('progress-fill').style.width = `${Math.min(100, (state.distance / state.totalDistance) * 100)}%`;
+}
+
+// ── Game Loop ────────────────────────────────────────
+let trailTimer = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (state.playing && !paused) {
+    // S-curve path center
+    let pathCenter = 0;
+    if (currentRunConfig?.sCurveWaypoints) {
+      pathCenter = getPathCenterX(-state.distance, currentRunConfig.sCurveWaypoints);
+    }
+
+    // Dynamic boundary — narrow in chute zones
+    const boundHalf = currentRunConfig?.playableHalfWidth || 22;
+    let activeHalf = boundHalf;
+    if (currentRunConfig?.narrowChutes) {
+      const pzCheck = -state.distance;
+      for (const chute of currentRunConfig.narrowChutes) {
+        if (pzCheck <= chute.startZ && pzCheck >= chute.endZ) {
+          activeHalf = chute.halfWidth;
+          break;
+        }
+      }
+    }
+
+    // Ice patch — reduce steering
+    let onIce = false;
+    icePatchObjects.forEach(patch => {
+      const dx = Math.abs(state.posX - patch.position.x);
+      const dz = Math.abs((-state.distance) - patch.position.z);
+      if (dx < patch.userData.halfWidth && dz < patch.userData.halfHeight) onIce = true;
+    });
+    const effectiveTurnMax = onIce
+      ? (currentRunConfig?.maxTurnSpeed || 0.045) * 0.5
+      : (currentRunConfig?.maxTurnSpeed || 0.045);
+
+    // Steering
+    let turn = 0;
+    if (keys['arrowleft'] || keys['a']) turn = -1;
+    if (keys['arrowright'] || keys['d']) turn = 1;
+    state.turnSpeed += turn * 0.003;
+    state.turnSpeed *= onIce ? 0.92 : 0.88;
+    state.turnSpeed = Math.max(-effectiveTurnMax, Math.min(effectiveTurnMax, state.turnSpeed));
+    state.posX += state.turnSpeed * state.speed * 45;
+
+    // Boundary clamping relative to path center
+    state.posX = Math.max(pathCenter - activeHalf, Math.min(pathCenter + activeHalf, state.posX));
+
+    // Chute wall collision
+    if (activeHalf < boundHalf) {
+      if (Math.abs(state.posX - pathCenter) >= activeHalf - 0.5) {
+        state.speed *= 0.95;
+        if (Math.abs(state.posX - pathCenter) >= activeHalf - 0.1) {
+          triggerCrash();
+          state.posX = pathCenter + Math.sign(state.posX - pathCenter) * (activeHalf - 1);
+        }
+      }
+    }
+
+    // Speed
+    if (keys['arrowup'] || keys['w']) state.speed = Math.min(state.maxSpeed, state.speed + state.acceleration);
+    else if (keys['arrowdown'] || keys['s']) state.speed = Math.max(state.minSpeed, state.speed - state.acceleration * 1.8);
+    else {
+      if (state.speed > state.baseSpeed) state.speed -= state.acceleration * 0.25;
+      if (state.speed < state.baseSpeed) state.speed += state.acceleration * 0.4;
+    }
+    state.distance += state.speed;
+
+    // Mogul physics
+    let onMogul = false;
+    mogulObjects.forEach(mogul => {
+      const dx = state.posX - mogul.position.x;
+      const dz = (-state.distance) - mogul.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < mogul.userData.radius) {
+        state.speed *= mogul.userData.slowFactor;
+        onMogul = true;
+      }
+    });
+
+    // Cliff band air — full rise→peak→descent arc using sine curve
+    let inAir = false;
+    cliffBandObjects.forEach(band => {
+      const pzNow = -state.distance;
+      const airZone = 20; // total arc distance (10 before cliff, 10 after)
+      const halfZone = airZone / 2;
+      if (pzNow < band.z + halfZone && pzNow > band.z - halfZone) {
+        inAir = true;
+        const progress = 1 - (band.z + halfZone - pzNow) / airZone; // 0→1 through arc
+        skier.position.y = Math.max(0, band.height * Math.sin(progress * Math.PI));
+        state.speed *= 1.005;
+      }
+    });
+
+    // No-fall zone tracking
+    state.inNoFallZone = false;
+    if (currentRunConfig?.noFallZones) {
+      const pzNFZ = -state.distance;
+      for (const zone of currentRunConfig.noFallZones) {
+        if (pzNFZ <= zone.startZ && pzNFZ >= zone.endZ) {
+          state.inNoFallZone = true;
+          break;
+        }
+      }
+    }
+
+    // Move skier
+    skier.position.x = state.posX;
+    skier.position.z = -state.distance;
+    if (onMogul && !inAir) skier.position.y = 0.3;
+    else if (!inAir && skier.position.y > 0.05) skier.position.y *= 0.8;
+    else if (!inAir) skier.position.y = 0;
+    skier.rotation.y = state.turnSpeed * 10;
+    skier.rotation.z = -state.turnSpeed * 3;
+
+    // Trails
+    trailTimer++;
+    if (trailTimer % 2 === 0) {
+      addTrail(state.posX - 0.15, skier.position.z + 0.4);
+      addTrail(state.posX + 0.15, skier.position.z + 0.4);
+    }
+
+    // Invincibility
+    if (state.invincible) {
+      state.invincibleTimer--;
+      skier.visible = Math.floor(state.invincibleTimer / 4) % 2 === 0;
+      if (state.invincibleTimer <= 0) { state.invincible = false; skier.visible = true; }
+    }
+
+    // NPC movement
+    npcSkiers.forEach(npc => {
+      const d = npc.userData;
+      d.time += 0.016;
+      npc.position.z -= d.speed;
+      npc.position.x = d.startX + Math.sin(d.time * d.wobbleFreq) * d.wobbleAmp;
+      npc.rotation.y = Math.cos(d.time * d.wobbleFreq) * 0.3;
+      if (npc.position.z > skier.position.z + 60) {
+        npc.position.z = skier.position.z - 80 - Math.random() * 60;
+        d.startX = (Math.random() - 0.5) * (activeHalf * 1.3);
+        npc.position.x = d.startX;
+      }
+    });
+
+    // Collisions — with knockback
+    const px = state.posX, pz = skier.position.z;
+    obstacles.forEach(ob => {
+      const dx = px - ob.position.x, dz = pz - ob.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const hitRadius = (ob.userData.radius || 2) + 0.5;
+      if (dist < hitRadius) {
+        triggerCrash();
+        if (dist > 0.01) {
+          const pushStrength = 3.0;
+          const nx = dx / dist, nz = dz / dist;
+          state.posX += nx * pushStrength;
+          state.posX = Math.max(pathCenter - activeHalf, Math.min(pathCenter + activeHalf, state.posX));
+          state.distance -= Math.abs(nz) * pushStrength * 0.5;
+          if (state.distance < 0) state.distance = 0;
+        }
+      }
+    });
+
+    collectibles.forEach(col => {
+      if (col.userData.collected) return;
+      const dx = px - col.position.x, dz = pz - col.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < (col.userData.radius || 1.5)) {
+        col.userData.collected = true;
+        if (col.userData.type === 'star') { state.stars++; col.visible = false; }
+        else if (col.userData.type === 'gate') {
+          state.coins += 5;
+          col.traverse(c => { if (c.isMesh) c.material = new THREE.MeshStandardMaterial({ color: 0x4caf50, emissive: 0x2e7d32, emissiveIntensity: 0.4, side: THREE.DoubleSide }); });
+        }
+        else { state.coins++; col.visible = false; }
+      }
+    });
+
+    if (state.distance >= state.totalDistance) completeLevel();
+
+    updateCamera();
+    updateHUD();
+  }
+
+  // Animate collectibles (not gates)
+  collectibles.forEach(col => {
+    if (col.userData.collected || col.userData.type === 'gate') return;
+    col.rotation.y += 0.025;
+    if (col.userData.baseY) col.position.y = col.userData.baseY + Math.sin(performance.now() * 0.003 + col.position.x * 2) * 0.2;
+  });
+
+  // Spin propeller hat
+  if (hatMesh) {
+    hatMesh.traverse(child => {
+      if (child.userData.isPropeller) child.rotation.y += 0.15;
+    });
+  }
+
+  // Snow
+  if (snowSystem) {
+    const sp = snowSystem.pts.geometry.getAttribute('position');
+    const cz = camera.position.z;
+    for (let i = 0; i < sp.count; i++) {
+      let x = sp.getX(i) + snowSystem.vels[i].x;
+      let y = sp.getY(i) + snowSystem.vels[i].y;
+      let z = sp.getZ(i) + snowSystem.vels[i].z;
+      if (y < 0) { y = 38 + Math.random() * 8; x = (skier ? skier.position.x : 0) + (Math.random() - 0.5) * 120; z = cz + (Math.random() - 0.5) * 120; }
+      sp.setXYZ(i, x, y, z);
+    }
+    sp.needsUpdate = true;
+    snowSystem.pts.position.z = cz * 0.5;
+  }
+
+  // Update Roth animation mixer
+  if (rothMixer) rothMixer.update(0.016);
+
+  // Sun follows
+  if (skier) {
+    sunLight.position.set(skier.position.x + 80, 120, skier.position.z - 60);
+    sunLight.target.position.set(skier.position.x, 0, skier.position.z - 15);
+    sunLight.target.updateMatrixWorld();
+  }
+
+  // Parallax background mountains
+  updateMountains();
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// Expose functions to HTML onclick attributes (ES modules scope)
+window.startGame = startGame;
+window.restartGame = restartGame;
+window.returnToTrailMap = returnToTrailMap;
+window.togglePause = togglePause;
+window.openShop = openShop;
+window.closeShop = closeShop;
+window.renderShopItems = renderShopItems;
+window.buyItem = buyItem;
+window.equipItem = equipItem;
+window.selectRun = selectRun;
+window.renderTrailMap = renderTrailMap;
+</script>
+</body>
+</html>
