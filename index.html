@@ -3093,10 +3093,13 @@ function animate() {
     let turn = 0;
     if (keys['arrowleft'] || keys['a']) turn = -1;
     if (keys['arrowright'] || keys['d']) turn = 1;
-    if (touch.active && Math.abs(touch.dx) > 10) {
-      turn = Math.max(-1, Math.min(1, touch.dx / 160));
+    if (touch.active && Math.abs(touch.dx) > 20) {
+      // Touch: directly set turnSpeed proportional to drag (no accumulation)
+      const dragTurn = Math.max(-1, Math.min(1, touch.dx / 200));
+      state.turnSpeed = dragTurn * effectiveTurnMax * 0.7;
+    } else {
+      state.turnSpeed += turn * 0.003;
     }
-    state.turnSpeed += turn * 0.003;
     state.turnSpeed *= onIce ? 0.92 : 0.88;
     state.turnSpeed = Math.max(-effectiveTurnMax, Math.min(effectiveTurnMax, state.turnSpeed));
     state.posX += state.turnSpeed * state.speed * 45;
