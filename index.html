@@ -2886,11 +2886,11 @@ const camLookAhead = 6;
 // Difficulty-based camera profiles: harder runs feel steeper
 const camProfiles = {
   'green':        { y: 3.8, z: 5.5, ahead: 5.0 },
-  'green-green':  { y: 3.6, z: 5.2, ahead: 5.5 },
+  'green-green':  { y: 3.7, z: 5.3, ahead: 5.5 },
   'blue':         { y: 3.5, z: 5.0, ahead: 6.0 },
-  'blue-blue':    { y: 3.2, z: 4.6, ahead: 6.8 },
-  'black':        { y: 3.0, z: 4.2, ahead: 7.5 },
-  'double-black': { y: 2.7, z: 3.8, ahead: 8.5 },
+  'blue-blue':    { y: 3.4, z: 4.8, ahead: 6.5 },
+  'black':        { y: 3.3, z: 4.6, ahead: 7.0 },
+  'double-black': { y: 3.1, z: 4.4, ahead: 7.5 },
 };
 let camRoll = 0; // smoothed camera roll for turn banking
 
@@ -2912,9 +2912,9 @@ function updateCamera() {
   camera.position.lerp(target, 0.12);
   camera.lookAt(blendX * 0.85, 1.5, skier.position.z - profile.ahead);
 
-  // Camera roll — bank into turns for carving feel
-  const targetRoll = -state.turnSpeed * 55;
-  camRoll += (targetRoll - camRoll) * 0.1;
+  // Camera roll — subtle bank into turns for carving feel
+  const targetRoll = -state.turnSpeed * 18;
+  camRoll += (targetRoll - camRoll) * 0.08;
   camera.rotation.z = camRoll;
 
   // FOV shift — widen at high speed for rush feel
