@@ -15,6 +15,15 @@
     font-family: 'Nunito', sans-serif;
     cursor: default;
     user-select: none;
+    touch-action: none;
+  }
+
+  .touch-indicator {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 51; pointer-events: none;
+    color: rgba(255,255,255,0.35); font-size: 0.75rem;
+    font-family: 'Nunito', sans-serif; text-align: center;
+    display: none; transition: opacity 0.8s ease;
   }
 
   canvas { display: block; }
@@ -29,34 +38,73 @@
     opacity: 0; transform: scale(1.05); pointer-events: none;
   }
 
-  .trail-map-bg {
+  #trail-map-canvas {
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, #1a3a5c 0%, #2d6a9f 15%, #87CEEB 35%, #c8dde9 50%, #e0e8ef 60%, #f0f6fa 75%, #fff 100%);
-  }
-  .trail-map-mountain {
-    position: absolute; bottom: 0; left: 0; right: 0; height: 72%;
-    clip-path: polygon(
-      0% 100%, 0% 85%, 3% 72%, 8% 60%, 12% 55%, 16% 62%, 20% 48%,
-      24% 42%, 28% 50%, 32% 35%, 36% 28%, 40% 38%, 44% 22%,
-      48% 15%, 52% 10%, 56% 18%, 60% 12%, 64% 22%, 68% 16%,
-      72% 28%, 76% 20%, 80% 32%, 84% 25%, 88% 38%, 92% 45%,
-      96% 55%, 100% 50%, 100% 100%
-    );
-    background: linear-gradient(180deg, #c8d8e4 0%, #d8e6f0 20%, #e8f0f4 50%, #f5f9fb 80%, #fff 100%);
-  }
-  /* Snow patches on mountain */
-  .trail-map-mountain::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 30%;
-    background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%);
+    width: 100%; height: 100%;
+    z-index: 1;
   }
 
-  .trail-map-svg {
-    position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+  .trail-map-legend {
+    position: absolute; right: 16px; top: 70px; bottom: 110px;
+    z-index: 5; width: 240px;
+    background: rgba(10,22,40,0.78);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px; padding: 14px; overflow-y: auto;
+    font-family: 'Nunito', sans-serif;
   }
-  .trail-map-svg polyline {
-    fill: none; stroke-width: 0.8; stroke-linecap: round; stroke-linejoin: round;
-    filter: drop-shadow(0 0.3px 0.5px rgba(0,0,0,0.35));
+  .legend-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1rem; font-weight: 700;
+    color: #fff; margin-bottom: 10px;
+    text-align: center; letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .legend-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 5px 7px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer; transition: background 0.2s; border-radius: 8px;
+  }
+  .legend-item:hover { background: rgba(255,255,255,0.06); }
+  .legend-item.selected { background: rgba(255,215,0,0.12); box-shadow: inset 0 0 0 1px rgba(255,215,0,0.3); }
+  .legend-icon {
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; color: #fff; font-weight: 700;
+    flex-shrink: 0; border: 2px solid rgba(255,255,255,0.25);
+  }
+  .legend-info { flex: 1; min-width: 0; }
+  .legend-name {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.8rem; font-weight: 600; color: #fff;
+  }
+  .legend-desc {
+    font-size: 0.65rem; color: rgba(255,255,255,0.5);
+    line-height: 1.3; margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .legend-specs {
+    font-size: 0.6rem; color: rgba(255,255,255,0.35); margin-top: 2px;
+  }
+
+  .trail-map-stats {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    z-index: 5; display: flex; justify-content: center; gap: 40px;
+    padding: 10px 20px;
+    background: rgba(10,22,40,0.75);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .stat-item { text-align: center; }
+  .stat-value {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.15rem; font-weight: 700; color: #ffd700;
+  }
+  .stat-label {
+    font-size: 0.6rem; color: rgba(255,255,255,0.5);
+    text-transform: uppercase; letter-spacing: 1px;
+    font-family: 'Nunito', sans-serif;
   }
 
   .trail-map-runs { position: absolute; inset: 0; z-index: 3; }
@@ -76,13 +124,14 @@
   .run-marker-label {
     position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
     white-space: nowrap; font-family: 'Fredoka', sans-serif;
-    font-size: 0.6rem; font-weight: 600; color: #1a3a5c;
-    text-shadow: 0 1px 3px rgba(255,255,255,0.9); pointer-events: none;
+    font-size: 0.6rem; font-weight: 600; color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 8px rgba(0,0,0,0.3); pointer-events: none;
   }
 
   .trail-map-title {
     position: absolute; top: 2.5%; left: 50%; transform: translateX(-50%);
     text-align: center; z-index: 5; animation: floatIn 1.2s ease-out;
+    pointer-events: none;
   }
 
   @keyframes floatIn {
@@ -104,7 +153,7 @@
   }
 
   .run-info-panel {
-    position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
     z-index: 5; background: rgba(10,22,40,0.82);
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.15);
@@ -145,8 +194,8 @@
   }
 
   .controls-hint-trail {
-    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-    z-index: 5; color: rgba(255,255,255,0.5); font-size: 0.75rem;
+    position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+    z-index: 6; color: rgba(255,255,255,0.5); font-size: 0.75rem;
     font-family: 'Nunito', sans-serif;
   }
   .controls-hint-trail kbd {
@@ -382,9 +431,7 @@
 <body>
 
 <div id="start-screen">
-  <div class="trail-map-bg"></div>
-  <div class="trail-map-mountain"></div>
-  <svg class="trail-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" id="trail-map-svg"></svg>
+  <canvas id="trail-map-canvas"></canvas>
   <div class="trail-map-runs" id="trail-map-runs"></div>
   <div class="trail-map-title">
     <div class="game-title">Ski Challenge</div>
@@ -403,6 +450,8 @@
   <div class="controls-hint-trail">
     <kbd>←</kbd> <kbd>→</kbd> steer · <kbd>↑</kbd> speed · <kbd>↓</kbd> brake
   </div>
+  <div id="trail-map-legend" class="trail-map-legend"></div>
+  <div id="trail-map-stats" class="trail-map-stats"></div>
 </div>
 
 <div id="hud">
@@ -422,6 +471,7 @@
   <div class="progress-label">DISTANCE TO FINISH</div>
   <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
 </div>
+<div class="touch-indicator" id="touch-indicator">Drag to steer &middot; Drag up/down for speed</div>
 
 <div id="crash-overlay"></div>
 <button id="pause-btn" onclick="togglePause()">⏸ Pause</button>
@@ -554,6 +604,8 @@ const state = {
 };
 
 const keys = {};
+const touch = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 const obstacles = [];
 const collectibles = [];
 const worldObjects = [];
@@ -787,47 +839,564 @@ function updateStartWallet() {
   if (el) el.textContent = save.wallet;
 }
 
-// ── Trail Map ───────────────────────────────────────
-function renderTrailMap() {
-  const svg = document.getElementById('trail-map-svg');
-  const runsContainer = document.getElementById('trail-map-runs');
-  if (!svg || !runsContainer) return;
-  svg.innerHTML = '';
-  runsContainer.innerHTML = '';
+// ── Seeded PRNG ──────────────────────────────────────
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
 
+// ── Trail Data Mapper ────────────────────────────────
+function buildCanvasTrailData(W, H) {
+  const scale = W / 1400;
+  const diffWidths = {
+    'green': 72, 'green-green': 58, 'blue': 46, 'blue-blue': 38, 'black': 30, 'double-black': 24
+  };
+  const diffSymbols = {
+    'green': '●', 'green-green': '●●', 'blue': '■', 'blue-blue': '■■', 'black': '◆', 'double-black': '◆◆'
+  };
+  const trails = [];
   RUN_ORDER.forEach(runId => {
-    const config = RUN_CONFIGS[runId];
-    const path = config.mapPath;
+    const c = RUN_CONFIGS[runId];
+    const pts = c.mapPath.points.map(p => [p[0] * W, p[1] * H]);
+    const w = (diffWidths[c.difficulty] || 46) * scale;
+    const cliffPos = (c.cliffBands || []).map(b => Math.min(1, Math.abs(b.z) / c.length));
+    const mogulRegs = (c.mogulZones || []).map(z => ({
+      start: Math.min(1, Math.abs(z.startZ) / c.length),
+      end: Math.min(1, Math.abs(z.endZ) / c.length)
+    }));
+    const noFallRegs = (c.noFallZones || []).map(z => ({
+      start: Math.min(1, Math.abs(z.startZ) / c.length),
+      end: Math.min(1, Math.abs(z.endZ) / c.length)
+    }));
+    trails.push({
+      id: runId, name: c.name, difficulty: c.difficulty,
+      difficultyLabel: c.difficultyLabel, description: c.description,
+      length: c.length, color: c.mapPath.color, points: pts, width: w,
+      symbol: diffSymbols[c.difficulty] || '●',
+      groomed: !c.moguls,
+      hasMoguls: !!c.moguls, hasRocks: !!c.rocks,
+      hasGates: (c.gateSpacing > 0) || !!(c.gateZones && c.gateZones.length),
+      gateSpacing: c.gateSpacing || 0,
+      cliffPositions: cliffPos, mogulRegions: mogulRegs, noFallRegions: noFallRegs,
+      treeDensity: c.sideTreeProb || 0.4,
+      totalStars: c.totalStars, lives: c.lives
+    });
+  });
+  return trails;
+}
 
-    // SVG polyline for the run path
-    const pointsStr = path.points.map(p => `${p[0] * 100},${p[1] * 100}`).join(' ');
-    const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    polyline.setAttribute('points', pointsStr);
-    polyline.setAttribute('stroke', path.color);
-    if (config.difficulty.includes('black')) {
-      polyline.setAttribute('stroke-dasharray', '1.5,0.8');
+// ── Interpolate along a polyline at parameter t (0-1) ──
+function interpTrail(pts, t) {
+  if (t <= 0) return { x: pts[0][0], y: pts[0][1], nx: 0, ny: 1 };
+  if (t >= 1) return { x: pts[pts.length-1][0], y: pts[pts.length-1][1], nx: 0, ny: 1 };
+  // compute total length
+  let segs = [];
+  let totalLen = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
+    const len = Math.sqrt(dx*dx + dy*dy);
+    segs.push({ len, dx, dy });
+    totalLen += len;
+  }
+  let target = t * totalLen;
+  let accum = 0;
+  for (let i = 0; i < segs.length; i++) {
+    if (accum + segs[i].len >= target) {
+      const frac = (target - accum) / segs[i].len;
+      const x = pts[i][0] + segs[i].dx * frac;
+      const y = pts[i][1] + segs[i].dy * frac;
+      // perpendicular normal (rotated 90 degrees)
+      const len = segs[i].len || 1;
+      const nx = -segs[i].dy / len;
+      const ny = segs[i].dx / len;
+      return { x, y, nx, ny };
     }
-    svg.appendChild(polyline);
+    accum += segs[i].len;
+  }
+  return { x: pts[pts.length-1][0], y: pts[pts.length-1][1], nx: 0, ny: 1 };
+}
 
-    // Clickable marker at the top of the path
-    const topPoint = path.points[0];
+// ── Canvas Rendering ──────────────────────────────────
+function drawSkyGradient(ctx, W, H) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1a3a5c');
+  g.addColorStop(0.12, '#2d6a9f');
+  g.addColorStop(0.30, '#6aaddb');
+  g.addColorStop(0.45, '#a8d4ed');
+  g.addColorStop(0.60, '#c8e4f0');
+  g.addColorStop(1.0, '#daedf7');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawMountainSilhouette(ctx, W, H) {
+  // Ridgeline from original clip-path percentages
+  const ridge = [
+    [0,0.85],[0.03,0.72],[0.08,0.60],[0.12,0.55],[0.16,0.62],[0.20,0.48],
+    [0.24,0.42],[0.28,0.50],[0.32,0.35],[0.36,0.28],[0.40,0.38],[0.44,0.22],
+    [0.48,0.15],[0.52,0.10],[0.56,0.18],[0.60,0.12],[0.64,0.22],[0.68,0.16],
+    [0.72,0.28],[0.76,0.20],[0.80,0.32],[0.84,0.25],[0.88,0.38],[0.92,0.45],
+    [0.96,0.55],[1.0,0.50]
+  ];
+  const mtnTop = H * 0.28; // mountain occupies bottom 72%
+  const g = ctx.createLinearGradient(0, mtnTop, 0, H);
+  g.addColorStop(0, '#c8d8e4');
+  g.addColorStop(0.25, '#d8e6f0');
+  g.addColorStop(0.55, '#e8f0f4');
+  g.addColorStop(0.85, '#f5f9fb');
+  g.addColorStop(1, '#ffffff');
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ridge.forEach(([px, py]) => {
+    ctx.lineTo(px * W, mtnTop + py * (H - mtnTop));
+  });
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  // Snow glow on peaks
+  const sg = ctx.createLinearGradient(0, mtnTop, 0, mtnTop + (H - mtnTop) * 0.35);
+  sg.addColorStop(0, 'rgba(255,255,255,0.55)');
+  sg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  ridge.forEach(([px, py]) => {
+    ctx.lineTo(px * W, mtnTop + py * (H - mtnTop));
+  });
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, mtnTop, W, (H - mtnTop) * 0.35);
+  ctx.restore();
+}
+
+function drawTrailSnowPath(ctx, trail) {
+  const pts = trail.points;
+  const hw = trail.width / 2;
+  const steps = 60;
+  const leftEdge = [], rightEdge = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const p = interpTrail(pts, t);
+    const wobble = Math.sin(i * 1.7) * hw * 0.08;
+    leftEdge.push([p.x + p.nx * (hw + wobble), p.y + p.ny * (hw + wobble)]);
+    rightEdge.push([p.x - p.nx * (hw - wobble), p.y - p.ny * (hw - wobble)]);
+  }
+  // Fill snow path
+  ctx.beginPath();
+  ctx.moveTo(leftEdge[0][0], leftEdge[0][1]);
+  for (let i = 1; i < leftEdge.length; i++) ctx.lineTo(leftEdge[i][0], leftEdge[i][1]);
+  for (let i = rightEdge.length - 1; i >= 0; i--) ctx.lineTo(rightEdge[i][0], rightEdge[i][1]);
+  ctx.closePath();
+  // Gradient fill
+  const topY = pts[0][1], botY = pts[pts.length-1][1];
+  const sg = ctx.createLinearGradient(0, topY, 0, botY);
+  sg.addColorStop(0, 'rgba(240,248,255,0.92)');
+  sg.addColorStop(1, 'rgba(250,253,255,0.78)');
+  ctx.fillStyle = sg;
+  ctx.fill();
+  // Subtle border
+  ctx.strokeStyle = 'rgba(180,200,220,0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Groomed lines for non-mogul trails
+  if (trail.groomed) {
+    const numLines = Math.max(2, Math.floor(trail.width / 10));
+    ctx.strokeStyle = 'rgba(190,210,225,0.28)';
+    ctx.lineWidth = 0.6;
+    for (let l = 0; l < numLines; l++) {
+      const offset = (l / (numLines - 1) - 0.5) * trail.width * 0.65;
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const p = interpTrail(pts, t);
+        const x = p.x + p.nx * offset + Math.sin(i * 0.8 + l) * 0.8;
+        const y = p.y + p.ny * offset;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+}
+
+function drawMogul(ctx, x, y, size) {
+  ctx.fillStyle = 'rgba(180,200,215,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, size * 1.2, size * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(x - size * 0.15, y - size * 0.1, size * 0.8, size * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawRock(ctx, x, y, size, rng) {
+  const sides = 6 + Math.floor(rng() * 4);
+  const hue = 200 + rng() * 20;
+  ctx.fillStyle = `hsl(${hue}, 8%, ${28 + rng() * 12}%)`;
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2;
+    const r = size * (0.6 + rng() * 0.4);
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // highlight
+  ctx.fillStyle = 'rgba(235,245,250,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(x - size * 0.15, y - size * 0.2, size * 0.35, size * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCliffBand(ctx, x, y, width) {
+  // Dark rock face
+  ctx.fillStyle = 'rgba(60,50,45,0.55)';
+  ctx.fillRect(x - width / 2, y, width, 5);
+  // Shadow below
+  ctx.fillStyle = 'rgba(30,25,20,0.25)';
+  ctx.fillRect(x - width / 2, y + 5, width, 3);
+  // Snow edge on top
+  ctx.fillStyle = 'rgba(240,248,255,0.5)';
+  ctx.fillRect(x - width / 2, y - 2, width, 2.5);
+}
+
+function drawGate(ctx, x, y, color, trailWidth) {
+  const gw = Math.min(trailWidth * 0.4, 14);
+  // Left pole
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - gw / 2, y + 8);
+  ctx.lineTo(x - gw / 2, y - 8);
+  ctx.stroke();
+  // Right pole
+  ctx.beginPath();
+  ctx.moveTo(x + gw / 2, y + 8);
+  ctx.lineTo(x + gw / 2, y - 8);
+  ctx.stroke();
+  // Flags
+  ctx.fillStyle = color;
+  ctx.fillRect(x - gw / 2, y - 8, 5, 4);
+  ctx.fillRect(x + gw / 2 - 5, y - 8, 5, 4);
+}
+
+function drawStartGate(ctx, trail) {
+  const p = interpTrail(trail.points, 0);
+  const hw = trail.width / 2;
+  ctx.save();
+  ctx.setLineDash([5, 3]);
+  ctx.strokeStyle = trail.difficulty.includes('black') ? 'rgba(100,100,100,0.5)' : trail.color;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(p.x - p.nx * hw, p.y - p.ny * hw);
+  ctx.lineTo(p.x + p.nx * hw, p.y + p.ny * hw);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFinishLine(ctx, trail) {
+  const p = interpTrail(trail.points, 1);
+  const hw = trail.width / 2;
+  const sz = 4;
+  const cols = Math.max(4, Math.floor(trail.width / sz));
+  const startX = p.x - p.nx * hw;
+  const startY = p.y - p.ny * hw;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < cols; col++) {
+      const isBlack = (row + col) % 2 === 0;
+      ctx.fillStyle = isBlack ? '#222' : '#fff';
+      const cx = startX + p.nx * (col * sz + sz / 2) * (trail.width / (cols * sz));
+      const cy = startY + p.ny * (col * sz + sz / 2) * (trail.width / (cols * sz));
+      ctx.fillRect(cx - sz / 2, cy + row * sz - sz, sz, sz);
+    }
+  }
+}
+
+function drawNoFallWarning(ctx, x, y) {
+  ctx.fillStyle = 'rgba(255,150,0,0.8)';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 8);
+  ctx.lineTo(x - 6, y + 4);
+  ctx.lineTo(x + 6, y + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px Fredoka, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', x, y);
+}
+
+function drawTrailFeatures(ctx, trail) {
+  const rng = seededRandom(trail.id.length * 1000 + trail.length);
+
+  // Mogul fields
+  if (trail.hasMoguls && trail.mogulRegions.length > 0) {
+    trail.mogulRegions.forEach(reg => {
+      const steps = 14;
+      for (let i = 0; i < steps; i++) {
+        const t = reg.start + (reg.end - reg.start) * (i / steps);
+        const p = interpTrail(trail.points, t);
+        const offset = (rng() - 0.5) * trail.width * 0.6;
+        drawMogul(ctx, p.x + p.nx * offset, p.y + p.ny * offset, 3 + rng() * 2);
+      }
+    });
+  }
+
+  // Rocks
+  if (trail.hasRocks) {
+    const rockCount = 6 + Math.floor(rng() * 5);
+    for (let i = 0; i < rockCount; i++) {
+      const t = 0.1 + rng() * 0.8;
+      const p = interpTrail(trail.points, t);
+      const offset = (rng() - 0.5) * trail.width * 0.5;
+      drawRock(ctx, p.x + p.nx * offset, p.y + p.ny * offset, 2.5 + rng() * 3, rng);
+    }
+  }
+
+  // Cliff bands
+  if (trail.cliffPositions.length > 0) {
+    trail.cliffPositions.forEach(t => {
+      const p = interpTrail(trail.points, t);
+      drawCliffBand(ctx, p.x, p.y, trail.width * 0.9);
+    });
+  }
+
+  // Gates
+  if (trail.hasGates) {
+    const gateCount = Math.max(3, Math.floor(trail.length / (trail.gateSpacing || 60)));
+    for (let i = 0; i < gateCount; i++) {
+      const t = 0.08 + (0.84 * i / gateCount);
+      const p = interpTrail(trail.points, t);
+      const color = i % 2 === 0 ? '#e53935' : '#1e88e5';
+      drawGate(ctx, p.x, p.y, color, trail.width);
+    }
+  }
+
+  // Start gates and finish lines
+  drawStartGate(ctx, trail);
+  drawFinishLine(ctx, trail);
+
+  // No-fall zone warnings
+  if (trail.noFallRegions.length > 0) {
+    trail.noFallRegions.forEach(reg => {
+      const pStart = interpTrail(trail.points, reg.start);
+      drawNoFallWarning(ctx, pStart.x + trail.width * 0.6, pStart.y);
+      const pEnd = interpTrail(trail.points, reg.end);
+      drawNoFallWarning(ctx, pEnd.x + trail.width * 0.6, pEnd.y);
+    });
+  }
+}
+
+function drawTree(ctx, x, y, scale) {
+  const s = scale;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.beginPath();
+  ctx.ellipse(x + 2 * s, y + 10 * s, 5 * s, 2.5 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Trunk
+  ctx.fillStyle = '#5D4037';
+  ctx.fillRect(x - 1.5 * s, y, 3 * s, 8 * s);
+  // 3 triangle layers
+  const greens = ['#2E7D32', '#388E3C', '#43A047'];
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = greens[i];
+    ctx.beginPath();
+    ctx.moveTo(x, y - (i + 1) * 8 * s);
+    ctx.lineTo(x - (10 - i * 2) * s, y - i * 5 * s);
+    ctx.lineTo(x + (10 - i * 2) * s, y - i * 5 * s);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawTrees(ctx, trailData, W, H) {
+  const rng = seededRandom(42);
+  const mtnTop = H * 0.28;
+  const gridX = 22, gridY = 28;
+  // Build simple trail bounding info for avoidance
+  const trailCenters = trailData.map(t => {
+    return t.points.map(p => ({ x: p[0], y: p[1], hw: t.width / 2 + 12 }));
+  });
+  function nearTrail(x, y) {
+    for (let t = 0; t < trailCenters.length; t++) {
+      const segs = trailCenters[t];
+      for (let i = 0; i < segs.length; i++) {
+        const dx = x - segs[i].x, dy = y - segs[i].y;
+        if (Math.abs(dx) < segs[i].hw && Math.abs(dy) < 40) return true;
+      }
+    }
+    return false;
+  }
+  for (let gx = 0; gx < W; gx += gridX) {
+    for (let gy = mtnTop + 20; gy < H - 50; gy += gridY) {
+      if (rng() > 0.45) continue;
+      const x = gx + (rng() - 0.5) * gridX * 0.8;
+      const y = gy + (rng() - 0.5) * gridY * 0.6;
+      if (nearTrail(x, y)) continue;
+      const scale = 0.5 + rng() * 0.6;
+      drawTree(ctx, x, y, scale);
+    }
+  }
+}
+
+function drawDifficultyMarkers(ctx, trailData) {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  trailData.forEach(trail => {
+    const [x, y] = trail.points[0];
+    const pillY = y - 26;
+    const sym = trail.symbol;
+    ctx.font = 'bold 10px Fredoka, sans-serif';
+    const tw = ctx.measureText(sym).width;
+    const pillW = tw + 18;
+    const pillH = 20;
+    // Pill background
+    ctx.fillStyle = trail.difficulty.includes('black') ? '#333' : trail.color;
+    ctx.beginPath();
+    const r = pillH / 2;
+    ctx.moveTo(x - pillW / 2 + r, pillY - pillH / 2);
+    ctx.lineTo(x + pillW / 2 - r, pillY - pillH / 2);
+    ctx.arc(x + pillW / 2 - r, pillY, r, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(x - pillW / 2 + r, pillY + pillH / 2);
+    ctx.arc(x - pillW / 2 + r, pillY, r, Math.PI / 2, -Math.PI / 2);
+    ctx.closePath();
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Symbol
+    ctx.fillStyle = '#fff';
+    ctx.fillText(sym, x, pillY + 0.5);
+  });
+}
+
+function drawTrailLabels(ctx, trailData) {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.font = '600 9px Nunito, sans-serif';
+  trailData.forEach(trail => {
+    const p = interpTrail(trail.points, 0.45);
+    const features = [];
+    if (trail.groomed) features.push('Groomed');
+    if (trail.hasMoguls) features.push('Moguls');
+    if (trail.hasRocks) features.push('Rocks');
+    if (trail.cliffPositions.length) features.push('Cliffs');
+    const label = `${trail.length}m`;
+    const lx = p.x + trail.width / 2 + 16;
+    const ly = p.y;
+    // Background
+    ctx.fillStyle = 'rgba(10,22,40,0.55)';
+    const tw = ctx.measureText(label).width;
+    ctx.fillRect(lx - tw / 2 - 4, ly - 2, tw + 8, 14);
+    // Text
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText(label, lx, ly);
+  });
+}
+
+// ── Trail Map Main Render ──────────────────────────────
+function renderTrailMap() {
+  const canvas = document.getElementById('trail-map-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  const trailData = buildCanvasTrailData(W, H);
+
+  // Draw layers back to front
+  drawSkyGradient(ctx, W, H);
+  drawMountainSilhouette(ctx, W, H);
+  trailData.forEach(t => drawTrailSnowPath(ctx, t));
+  drawTrees(ctx, trailData, W, H);
+  trailData.forEach(t => drawTrailFeatures(ctx, t));
+  drawDifficultyMarkers(ctx, trailData);
+  drawTrailLabels(ctx, trailData);
+
+  // HTML overlays
+  renderTrailMarkers(trailData);
+  renderLegend(trailData);
+  renderStatsBar();
+  selectRun(selectedRun);
+}
+
+function renderTrailMarkers(trailData) {
+  const el = document.getElementById('trail-map-runs');
+  if (!el) return;
+  el.innerHTML = '';
+  trailData.forEach(trail => {
+    const [x, y] = trail.points[0];
     const marker = document.createElement('div');
-    marker.className = 'run-marker' + (runId === selectedRun ? ' selected' : '');
-    marker.style.left = `${topPoint[0] * 100}%`;
-    marker.style.top = `${topPoint[1] * 100}%`;
-    marker.style.background = path.color;
-    marker.dataset.run = runId;
-    marker.onclick = () => selectRun(runId);
-
+    marker.className = 'run-marker' + (trail.id === selectedRun ? ' selected' : '');
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+    marker.style.background = trail.difficulty.includes('black') ? '#555' : trail.color;
+    marker.dataset.run = trail.id;
+    marker.onclick = () => selectRun(trail.id);
+    marker.ondblclick = () => { selectRun(trail.id); startGame(); };
     const label = document.createElement('div');
     label.className = 'run-marker-label';
-    label.textContent = config.name;
+    label.textContent = trail.name;
     marker.appendChild(label);
-    runsContainer.appendChild(marker);
+    el.appendChild(marker);
   });
+}
 
-  // Update info panel for currently selected run
-  selectRun(selectedRun);
+function renderLegend(trailData) {
+  const el = document.getElementById('trail-map-legend');
+  if (!el) return;
+  let html = '<div class="legend-title">Trail Guide</div>';
+  trailData.forEach(trail => {
+    const feats = [];
+    if (trail.groomed) feats.push('Groomed');
+    if (trail.hasMoguls) feats.push('Moguls');
+    if (trail.hasRocks) feats.push('Rocks');
+    if (trail.cliffPositions.length) feats.push(trail.cliffPositions.length + ' Cliffs');
+    if (trail.hasGates) feats.push('Gates');
+    if (trail.noFallRegions.length) feats.push('No-Fall');
+    const sel = trail.id === selectedRun;
+    const bg = trail.difficulty.includes('black') ? '#333' : trail.color;
+    html += `<div class="legend-item${sel ? ' selected' : ''}" data-run="${trail.id}" onclick="selectRun('${trail.id}')" ondblclick="selectRun('${trail.id}'); startGame();">
+      <div class="legend-icon" style="background:${bg}">${trail.symbol}</div>
+      <div class="legend-info">
+        <div class="legend-name">${trail.name}</div>
+        <div class="legend-desc">${trail.description}</div>
+        <div class="legend-specs">${trail.length}m &middot; ${feats.join(', ')}</div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderStatsBar() {
+  const el = document.getElementById('trail-map-stats');
+  if (!el) return;
+  const totalLen = RUN_ORDER.reduce((s, id) => s + RUN_CONFIGS[id].length, 0);
+  el.innerHTML = `
+    <div class="stat-item"><div class="stat-value">${RUN_ORDER.length}</div><div class="stat-label">Runs</div></div>
+    <div class="stat-item"><div class="stat-value">3,845'</div><div class="stat-label">Vert Drop</div></div>
+    <div class="stat-item"><div class="stat-value">${totalLen}m</div><div class="stat-label">Total Trail</div></div>
+    <div class="stat-item"><div class="stat-value">280"</div><div class="stat-label">Avg Snowfall</div></div>
+  `;
 }
 
 function selectRun(runId) {
@@ -837,6 +1406,11 @@ function selectRun(runId) {
   // Update markers
   document.querySelectorAll('.run-marker').forEach(m => {
     m.classList.toggle('selected', m.dataset.run === runId);
+  });
+
+  // Update legend items
+  document.querySelectorAll('.legend-item').forEach(item => {
+    item.classList.toggle('selected', item.dataset.run === runId);
   });
 
   // Update info panel
@@ -2282,14 +2856,49 @@ createSnow();
 createPlayerSkier();
 renderTrailMap();
 updateStartWallet();
+// Swap controls hint for touch devices
+if (isTouch) {
+  const hint = document.querySelector('.controls-hint-trail');
+  if (hint) hint.innerHTML = 'Drag to steer &middot; Drag up/down for speed';
+}
 
 // ── Input ────────────────────────────────────────────
 window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; keys[e.code] = true; });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; keys[e.code] = false; });
+
+// Touch controls — drag to steer
+document.addEventListener('touchstart', e => {
+  if (e.target.closest('.start-btn, .run-info-panel, .trail-map-legend, .trail-map-stats, .run-marker, .shop-overlay, #hud, .pause-menu, .legend-item, .shop-close-btn, .shop-cat-btn, .shop-item')) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  touch.active = true;
+  touch.startX = t.clientX;
+  touch.startY = t.clientY;
+  touch.dx = 0;
+  touch.dy = 0;
+}, { passive: false });
+
+document.addEventListener('touchmove', e => {
+  if (!touch.active) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  touch.dx = t.clientX - touch.startX;
+  touch.dy = t.clientY - touch.startY;
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+  touch.active = false;
+  touch.dx = 0;
+  touch.dy = 0;
+});
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // Re-render trail map canvas if start screen is visible
+  if (!document.getElementById('start-screen').classList.contains('hidden')) {
+    renderTrailMap();
+  }
 });
 
 // ── Game Flow ────────────────────────────────────────
@@ -2340,6 +2949,16 @@ function startGame() {
   document.getElementById('game-over').style.display = 'none';
   document.getElementById('shop-overlay').classList.remove('active');
   applyCosmetics();
+
+  // Show touch hint briefly on touch devices
+  if (isTouch) {
+    const ti = document.getElementById('touch-indicator');
+    if (ti) {
+      ti.style.display = 'block';
+      ti.style.opacity = '1';
+      setTimeout(() => { ti.style.opacity = '0'; setTimeout(() => ti.style.display = 'none', 800); }, 3500);
+    }
+  }
 }
 
 function restartGame() { startGame(); }
@@ -2474,6 +3093,9 @@ function animate() {
     let turn = 0;
     if (keys['arrowleft'] || keys['a']) turn = -1;
     if (keys['arrowright'] || keys['d']) turn = 1;
+    if (touch.active && Math.abs(touch.dx) > 10) {
+      turn = Math.max(-1, Math.min(1, touch.dx / 80));
+    }
     state.turnSpeed += turn * 0.003;
     state.turnSpeed *= onIce ? 0.92 : 0.88;
     state.turnSpeed = Math.max(-effectiveTurnMax, Math.min(effectiveTurnMax, state.turnSpeed));
@@ -2494,8 +3116,10 @@ function animate() {
     }
 
     // Speed
-    if (keys['arrowup'] || keys['w']) state.speed = Math.min(state.maxSpeed, state.speed + state.acceleration);
-    else if (keys['arrowdown'] || keys['s']) state.speed = Math.max(state.minSpeed, state.speed - state.acceleration * 1.8);
+    const touchUp = touch.active && touch.dy < -30;
+    const touchDown = touch.active && touch.dy > 30;
+    if (keys['arrowup'] || keys['w'] || touchUp) state.speed = Math.min(state.maxSpeed, state.speed + state.acceleration);
+    else if (keys['arrowdown'] || keys['s'] || touchDown) state.speed = Math.max(state.minSpeed, state.speed - state.acceleration * 1.8);
     else {
       if (state.speed > state.baseSpeed) state.speed -= state.acceleration * 0.25;
       if (state.speed < state.baseSpeed) state.speed += state.acceleration * 0.4;
