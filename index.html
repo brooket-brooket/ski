@@ -3094,7 +3094,7 @@ function animate() {
     if (keys['arrowleft'] || keys['a']) turn = -1;
     if (keys['arrowright'] || keys['d']) turn = 1;
     if (touch.active && Math.abs(touch.dx) > 10) {
-      turn = Math.max(-1, Math.min(1, touch.dx / 80));
+      turn = Math.max(-1, Math.min(1, touch.dx / 160));
     }
     state.turnSpeed += turn * 0.003;
     state.turnSpeed *= onIce ? 0.92 : 0.88;
