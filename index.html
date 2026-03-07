@@ -2945,7 +2945,7 @@ window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; keys[
 
 // Touch controls — drag to steer
 document.addEventListener('touchstart', e => {
-  if (e.target.closest('.start-btn, .run-info-panel, .trail-map-legend, .trail-map-stats, .run-marker, .shop-overlay, #hud, .pause-menu, .legend-item, .shop-close-btn, .shop-cat-btn, .shop-item')) return;
+  if (e.target.closest('.start-btn, .run-info-panel, .trail-map-legend, .trail-map-stats, .run-marker, .shop-overlay, #hud, .pause-menu, .legend-item, .shop-close-btn, .shop-cat-btn, .shop-item, .restart-btn, #level-complete, #game-over')) return;
   e.preventDefault();
   const t = e.touches[0];
   touch.active = true;
