@@ -1241,7 +1241,7 @@ function drawTrees(ctx, trailData, W, H) {
   }
   for (let gx = 0; gx < W; gx += gridX) {
     for (let gy = mtnTop + 20; gy < H - 50; gy += gridY) {
-      if (rng() > 0.45) continue;
+      if (rng() > 0.06) continue;
       const x = gx + (rng() - 0.5) * gridX * 0.8;
       const y = gy + (rng() - 0.5) * gridY * 0.6;
       if (nearTrail(x, y)) continue;
@@ -3170,10 +3170,10 @@ function animate() {
     let turn = 0;
     if (keys['arrowleft'] || keys['a']) turn = -1;
     if (keys['arrowright'] || keys['d']) turn = 1;
-    if (touch.active && Math.abs(touch.dx) > 20) {
+    if (touch.active && Math.abs(touch.dx) > 25) {
       // Touch: directly set turnSpeed proportional to drag (no accumulation)
-      const dragTurn = Math.max(-1, Math.min(1, touch.dx / 200));
-      state.turnSpeed = dragTurn * effectiveTurnMax * 0.7;
+      const dragTurn = Math.max(-1, Math.min(1, touch.dx / 300));
+      state.turnSpeed = dragTurn * effectiveTurnMax * 0.55;
     } else {
       state.turnSpeed += turn * 0.003;
     }
