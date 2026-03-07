@@ -3171,9 +3171,9 @@ function animate() {
     if (keys['arrowleft'] || keys['a']) turn = -1;
     if (keys['arrowright'] || keys['d']) turn = 1;
     if (touch.active && Math.abs(touch.dx) > 25) {
-      // Touch: directly set turnSpeed proportional to drag (no accumulation)
-      const dragTurn = Math.max(-1, Math.min(1, touch.dx / 300));
-      state.turnSpeed = dragTurn * effectiveTurnMax * 0.55;
+      // Touch: drag distance controls carve intensity — further = harder turn
+      const dragTurn = Math.max(-1, Math.min(1, touch.dx / 200));
+      state.turnSpeed = dragTurn * effectiveTurnMax;
     } else {
       state.turnSpeed += turn * 0.003;
     }
@@ -3258,8 +3258,8 @@ function animate() {
     if (onMogul && !inAir) skier.position.y = groundY + 0.3;
     else if (!inAir && skier.position.y > groundY + 0.05) skier.position.y = groundY + (skier.position.y - groundY) * 0.8;
     else if (!inAir) skier.position.y = groundY;
-    skier.rotation.y = state.turnSpeed * 10;
-    skier.rotation.z = -state.turnSpeed * 3;
+    skier.rotation.y = state.turnSpeed * 18;
+    skier.rotation.z = -state.turnSpeed * 6;
 
     // Trails
     trailTimer++;
