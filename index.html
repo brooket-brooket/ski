@@ -2418,6 +2418,53 @@ function createGate(x, z) {
   worldObjects.push(group);
 }
 
+// ── Finish Line ──────────────────────────────────────
+function createFinishLine(halfW, z) {
+  const group = new THREE.Group();
+  const poleSpacing = Math.min(halfW * 2, 12);
+  const poleH = 4.5;
+
+  // Two tall poles
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.3, metalness: 0.5 });
+  [-poleSpacing / 2, poleSpacing / 2].forEach(x => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, poleH, 8), poleMat);
+    pole.position.set(x, poleH / 2, 0);
+    pole.castShadow = true;
+    group.add(pole);
+  });
+
+  // Checkered banner using a canvas texture
+  const bannerW = 512, bannerH = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = bannerW; canvas.height = bannerH;
+  const bctx = canvas.getContext('2d');
+  const sq = 32;
+  for (let row = 0; row < bannerH / sq; row++) {
+    for (let col = 0; col < bannerW / sq; col++) {
+      bctx.fillStyle = (row + col) % 2 === 0 ? '#111' : '#fff';
+      bctx.fillRect(col * sq, row * sq, sq, sq);
+    }
+  }
+  // "FINISH" text
+  bctx.fillStyle = '#e53935';
+  bctx.font = 'bold 52px sans-serif';
+  bctx.textAlign = 'center';
+  bctx.textBaseline = 'middle';
+  bctx.fillText('FINISH', bannerW / 2, bannerH / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(poleSpacing, poleH * 0.28),
+    new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.6 })
+  );
+  banner.position.set(0, poleH - 0.7, 0);
+  group.add(banner);
+
+  group.position.set(0, 0, z);
+  scene.add(group);
+  worldObjects.push(group);
+}
+
 // ── Star ─────────────────────────────────────────────
 function createStar(x, z) {
   const group = new THREE.Group();
@@ -2819,6 +2866,9 @@ function generateLevel(config) {
     });
   }
 
+  // ── Finish Line ──
+  createFinishLine(halfW, -(c.length));
+
   // ── Stars ──
   for (let i = 0; i < c.totalStars; i++) {
     const sz = -22 - (i / c.totalStars) * (runLen - 40);
@@ -2833,20 +2883,47 @@ function generateLevel(config) {
 const camOffset = new THREE.Vector3(0, 3.5, 5);
 const camLookAhead = 6;
 
+// Difficulty-based camera profiles: harder runs feel steeper
+const camProfiles = {
+  'green':        { y: 3.8, z: 5.5, ahead: 5.0 },
+  'green-green':  { y: 3.6, z: 5.2, ahead: 5.5 },
+  'blue':         { y: 3.5, z: 5.0, ahead: 6.0 },
+  'blue-blue':    { y: 3.2, z: 4.6, ahead: 6.8 },
+  'black':        { y: 3.0, z: 4.2, ahead: 7.5 },
+  'double-black': { y: 2.7, z: 3.8, ahead: 8.5 },
+};
+let camRoll = 0; // smoothed camera roll for turn banking
+
 function updateCamera() {
   if (!skier) return;
   let pathCenter = 0;
   if (currentRunConfig?.sCurveWaypoints) {
     pathCenter = getPathCenterX(-state.distance, currentRunConfig.sCurveWaypoints);
   }
+
+  // Difficulty-based camera offsets
+  const profile = camProfiles[currentRunConfig?.difficulty] || camProfiles['blue'];
   const blendX = (skier.position.x + pathCenter) * 0.5;
   const target = new THREE.Vector3(
     blendX * 0.75,
-    skier.position.y + camOffset.y,
-    skier.position.z + camOffset.z
+    skier.position.y + profile.y,
+    skier.position.z + profile.z
   );
   camera.position.lerp(target, 0.12);
-  camera.lookAt(blendX * 0.85, 1.5, skier.position.z - camLookAhead);
+  camera.lookAt(blendX * 0.85, 1.5, skier.position.z - profile.ahead);
+
+  // Camera roll — bank into turns for carving feel
+  const targetRoll = -state.turnSpeed * 55;
+  camRoll += (targetRoll - camRoll) * 0.1;
+  camera.rotation.z = camRoll;
+
+  // FOV shift — widen at high speed for rush feel
+  const baseFov = 55;
+  const speedRange = (state.maxSpeed - state.minSpeed) || 1;
+  const speedFrac = Math.max(0, Math.min(1, (state.speed - state.minSpeed) / speedRange));
+  const targetFov = baseFov + speedFrac * 8;
+  camera.fov += (targetFov - camera.fov) * 0.08;
+  camera.updateProjectionMatrix();
 }
 
 // ── Init ─────────────────────────────────────────────
